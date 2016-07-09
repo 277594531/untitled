@@ -8,5 +8,6 @@ public class Hello {
     public static void main(String[] args){
         System.out.println("hello");
         System.out.println("Tom, what are you doing?");
+        System.out.println(MathUtil.Add(1.1, 2.2));
     }
 }
