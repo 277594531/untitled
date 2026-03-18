@@ -1,0 +1,419 @@
+{
+  "meta": {
+    "lastTouchedVersion": "2026.3.8",
+    "lastTouchedAt": "2026-03-11T23:10:00.000Z"
+  },
+  "wizard": {
+    "lastRunAt": "2026-03-07T07:01:42.179Z",
+    "lastRunVersion": "2026.3.2",
+    "lastRunCommand": "onboard",
+    "lastRunMode": "local"
+  },
+  "auth": {
+    "profiles": {
+      "qwen-portal:default": {
+        "provider": "qwen-portal",
+        "mode": "api_key"
+      },
+      "qianfan-portal:default": {
+        "provider": "qianfan",
+        "mode": "api_key"
+      },
+      "spark-portal:default": {
+        "provider": "spark",
+        "mode": "api_key"
+      },
+      "openrouter-portal:default": {
+        "provider": "openrouter-portal",
+        "mode": "api_key"
+      },      
+      "volcengine-portal:default": {
+        "provider": "volcengine-portal",
+        "mode": "api_key"
+      }
+
+    }
+  },
+  "models": {
+    "providers": {
+      "qwen-portal": {
+        "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "apiKey": "${QWEN_API_KEY}",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "qwen3.5-plus",
+            "name": "Qwen3.5 Plus",
+            "reasoning": false,
+            "input": [
+              "text",
+              "image"
+            ],
+            "contextWindow": 256000,
+            "maxTokens": 8192
+          },
+          {
+            "id": "qwen3.5-flash",
+            "name": "Qwen3.5 flash",
+            "reasoning": false,
+            "input": [
+              "text",
+              "image"
+            ],
+            "contextWindow": 256000,
+            "maxTokens": 8192
+          },
+          {
+            "id": "qwen3-max",
+            "name": "Qwen3 Max",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "contextWindow": 256000,
+            "maxTokens": 8192
+          },
+          {
+            "id": "qwen3.5-flash-2026-02-23",
+            "name": "Qwen3.5 flash 26",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "contextWindow": 256000,
+            "maxTokens": 8192
+          },
+          {
+            "id": "deepseek-r1-distill-qwen-32b",
+            "name": "Deepseek r1 qwen",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "contextWindow": 81920,
+            "maxTokens": 56000
+          },
+          {
+            "id": "qwen3.5-turbo",
+            "name": "Qwen3.5 Turbo",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "contextWindow": 128000,
+            "maxTokens": 8192
+          },
+          {
+            "id": "qwen-plus",
+            "name": "Qwen Plus",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "contextWindow": 131072,
+            "maxTokens": 8192
+          },
+          {
+            "id": "qwen-max",
+            "name": "Qwen Max",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "contextWindow": 32768,
+            "maxTokens": 8192
+          }
+        ]
+      },
+      "qianfan-portal": {
+        "baseUrl": "https://qianfan.baidubce.com/v2",
+        "apiKey": "${QIANFAN_API_KEY}",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "ernie-x1.1",
+            "name": "ERNIE x1.1",
+            "contextWindow": 200000,
+            "maxTokens": 8192
+          },
+          {
+            "id": "ernie-4.5",
+            "name": "ERNIE 4.5",
+            "contextWindow": 1000000,
+            "maxTokens": 10000
+          },
+          {
+            "id": "ernie-3.5-turbo",
+            "name": "ERNIE 3.5 Turbo",
+            "contextWindow": 1000000,
+            "maxTokens": 10000
+          },
+          {
+            "id": "ernie-4.0-turbo-8k",
+            "name": "ERNIE 4.0 Turbo",
+            "reasoning": true,
+            "input": [
+              "text",
+              "image"
+            ],
+            "contextWindow": 18000,
+            "maxTokens": 8000
+          },
+          {
+            "id": "ernie-4.5-turbo-128k",
+            "name": "ERNIE 4.5 Turbo",
+            "reasoning": true,
+            "input": [
+              "text",
+              "image"
+            ],
+            "contextWindow": 16384,
+            "maxTokens": 12123
+          },
+          {
+            "id": "ernie-speed-128k",
+            "name": "ERNIE Speed (Free/Low Cost)",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "contextWindow": 128000,
+            "maxTokens": 8192
+          },
+          {
+            "id": "ernie-3.5-8k",
+            "name": "ERNIE 3.5",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "contextWindow": 8192,
+            "maxTokens": 4096
+          }
+        ]
+      },
+      "spark-portal": {
+        "baseUrl": "https://spark-api-open.xf-yun.com/v1",
+        "apiKey": "${SPARK_API_KEY}",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "lite",
+            "name": "Spark Lite (Free)",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "contextWindow": 16384,
+            "maxTokens": 7200
+          }
+        ]
+      },
+      "openrouter-portal": {
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "apiKey": "${OPENROUTER_API_KEY}",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "openrouter/hunter-alpha:free",
+            "name": "Hunter Alpha (Free)",
+            "contextWindow": 1048576,
+            "maxTokens": 8192
+          },
+          {
+            "id": "nvidia/nemotron-3-super-120b-a12b:free",
+            "name": "Nemotron 3 Super (Free)",
+            "contextWindow": 262144,
+            "maxTokens": 8192
+          },
+          {
+            "id": "google/gemini-2.0-flash-exp:free",
+            "name": "Gemini 2.0 Flash (Free)",
+            "contextWindow": 1048576,
+            "maxTokens": 8192
+          },
+          {
+            "id": "stepfun/step-3-5-flash:free",
+            "name": "Step 3.5 Flash (Free)",
+            "contextWindow": 256000,
+            "maxTokens": 8192
+          }
+        ]
+      },
+      "volcengine-portal": {
+        "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
+        "apiKey": "${VOLC_API_KEY}",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "doubao-seed-1-6-251015",
+            "name": "Doubao Seed 1.6",
+            "reasoning": true,
+            "input": ["text"],
+            "contextWindow": 131072,
+            "maxTokens": 16384
+          }
+        ]
+      }
+
+
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "volcengine-portal/doubao-seed-1-6-251015"
+      },
+      "models": {
+        "qwen-portal/qwen3.5-plus": {
+          "alias": "qwen3.5-plus"
+        },
+        "qwen-portal/qwen3.5-flash": {
+          "alias": "qwen3.5-flash"
+        },
+        "qwen-portal/qwen3.5-flash-2026-02-23": {
+          "alias": "qwen3.5-flash-2026-02-23"
+        },
+        "qwen-portal/deepseek-r1-distill-qwen-32b": {
+          "alias": "deepseek-r1-qwen"
+        },
+        "qwen-portal/qwen3-max": {
+          "alias": "qwen3-max"
+        },
+        "qwen-portal/qwen3.5-turbo": {
+          "alias": "qwen3.5-turbo"
+        },
+        "qwen-portal/qwen-plus": {
+          "alias": "qwen-plus"
+        },
+        "qwen-portal/qwen-max": {
+          "alias": "qwen-max"
+        },
+        "qianfan-portal/ernie-4.0-turbo-8k": {
+          "alias": "ernie-4.0-turbo-8k"
+        },
+        "qianfan-portal/ernie-4.5-turbo-128k": {
+          "alias": "ernie-4.5-turbo"
+        },
+        "qianfan-portal/ernie-4.5": {
+          "alias": "ernie-4.5"
+        },
+        "qianfan-portal/ernie-3.5-turbo": {
+          "alias": "ernie-3.5-turbo"
+        },
+        "qianfan-portal/ernie-speed-128k": {
+          "alias": "ernie-speed-128k"
+        },
+        "spark-portal/lite": {
+          "alias": "spark-lite"
+        },
+        "openrouter-portal/openrouter/hunter-alpha:free": {
+          "alias": "hunter-agent"
+        },
+        "openrouter-portal/nvidia/nemotron-3-super-120b-a12b:free": {
+          "alias": "nemotron-agent"
+        },
+        "openrouter-portal/google/gemini-2.0-flash-exp:free": {
+          "alias": "gemini-free"
+        },
+        "openrouter-portal/stepfun/step-3-5-flash:free": {
+          "alias": "step-flash"
+        },
+        "volcengine-portal/doubao-seed-1-6-251015": {
+          "alias": "doubao-seed-1.6"
+        }
+
+      },
+      "workspace": "/home/ethan/.openclaw/workspace",
+      "compaction": {
+        "mode": "safeguard"
+      },
+      "maxConcurrent": 4,
+      "subagents": {
+        "maxConcurrent": 8
+      }
+    }
+  },
+  "tools": {
+    "profile": "full"
+  },
+  "messages": {
+    "ackReactionScope": "group-mentions"
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto",
+    "restart": true,
+    "ownerDisplay": "raw"
+  },
+  "session": {
+    "dmScope": "per-channel-peer"
+  },
+  "channels": {
+    "whatsapp": {
+      "enabled": true,
+      "dmPolicy": "allowlist",
+      "selfChatMode": true,
+      "allowFrom": [
+        "+8618516141412"
+      ],
+      "groupPolicy": "allowlist",
+      "debounceMs": 0,
+      "mediaMaxMb": 50
+    }
+  },
+  "gateway": {
+    "port": 18789,
+    "mode": "local",
+    "bind": "loopback",
+    "customBindHost": "172.19.52.13",
+    "controlUi": {
+      "allowedOrigins": [
+        "http://localhost:18789",
+        "http://127.0.0.1:18789",
+        "http://47.253.254.195:18789"
+      ]
+    },
+    "auth": {
+      "mode": "token",
+      "token": "${GATEWAY_TOKEN}"
+    },
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
+    }
+  },
+  "skills": {
+    "install": {
+      "nodeManager": "npm"
+    },
+    "entries": {
+      "shell": {
+        "enabled": true
+      },
+      "filesystem": {
+        "enabled": true
+      },
+      "http": {
+        "enabled": true
+      },
+      "memory": {
+        "enabled": true
+      },
+      "search": {
+        "enabled": true,
+        "apiKey": "${TAVILY_API_KEY}"
+      }
+    }
+  },
+  "plugins": {
+    "entries": {
+      "qwen-portal-auth": {
+        "enabled": false
+      },
+      "whatsapp": {
+        "enabled": true
+      }
+    }
+  }
+}
