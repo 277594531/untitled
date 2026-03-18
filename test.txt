@@ -1,0 +1,36 @@
+
+
+
+OpenClaw agent on windows 11 for daily Development Integration Testing servers operations automation. I have several such environments, like DIT1, DIT2, … DIT8. Each have some Suse Linux servers. I need to operate the servers and services on them time to time. I want to design and write scripts to automate this, and I want to introduce openclaw agent to help me on the automation of these operations. Do you get my idea? Please help me design the tools or say “hands” for the agent. I.e. maybe need to provide a get date and time git-bash script for it, and some other scripts for checking servers status, and also services status, etc. help me design what you think to prepare for the agent 
+
+
+
+
+Great. I will answer your further questions later. Now I want you to evaluate some others suggested tools and config involved as below for the design 
+
+C:\openclaw-tools\
+
+tools/
+configs/
+logs/
+
+tools/
+  get_datetime.sh
+  list_envs.sh
+  list_servers.sh
+  check_server.sh
+  check_service.sh
+  restart_service.sh
+  health_check.sh
+  deploy.sh
+
+configs/
+  DIT1.servers
+  DIT2.servers
+
+
+
+
+
+
+
