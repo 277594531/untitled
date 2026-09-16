@@ -891,3 +891,980 @@ And with that clarification, I would slightly redesign the original architecture
 
 
 
+As I am to build up all these from the ground with AI, I need a strategy to do that, you give me a solution how to do this? What I can think of is that, maybe we will first complete a high level design of the architecture, and then maybe detailing it at middle level or we build up the high level architecture with real code structure, etc. you give your solution of the project 
+
+
+
+Yes. Since you are building this from zero with AI, I would not start by asking AI to “build the application.” That tends to produce a large amount of plausible code before the architecture, boundaries, and protocol behavior are sufficiently understood.
+
+I would use a specification → architecture → executable skeleton → vertical slices → expansion strategy.
+
+And there is an especially interesting connection with your recent idea about Markdown as the level-zero source code: this project is actually a very good candidate for that approach.
+
+1. The overall strategy
+
+I would structure the project into five levels:
+
+                    LEVEL 0
+              Product Specification
+                     Markdown
+                        │
+                        ▼
+                    LEVEL 1
+             High-Level Architecture
+                     Markdown
+                        │
+                        ▼
+                    LEVEL 2
+             Detailed Technical Design
+                     Markdown
+                        │
+                        ▼
+                    LEVEL 3
+              Real Source Code
+                        │
+                        ▼
+                    LEVEL 4
+              Executable System
+
+But there is an important feedback loop:
+
+Markdown specification
+        ↓
+       AI
+        ↓
+    Source code
+        ↓
+      Build
+        ↓
+     Tests
+        ↓
+   Real behavior
+        │
+        └──────────→ specification/design refinement
+
+So the Markdown isn’t merely documentation.
+
+It becomes the design authority from which AI generates and modifies the implementation.
+
+⸻
+
+2. First: define the product, not the technology
+
+Before Java, Spring, React, Netty, Docker, etc., I would create something like:
+
+docs/
+├── 00-product-vision.md
+├── 01-requirements.md
+├── 02-concepts.md
+├── 03-use-cases.md
+└── 04-glossary.md
+
+The first document should answer:
+
+What exactly are we building?
+
+For example:
+
+Host Simulator Management Platform
+Purpose:
+Provide a web-based platform for creating, running,
+monitoring and controlling multiple independent
+horse-racing ITSP host simulator instances.
+The platform shall allow an operator to:
+- create simulator instances
+- assign TCP ports
+- start/stop/restart instances
+- configure simulation behavior
+- monitor TCP connections
+- inspect ITSP messages
+- create/run races
+- observe race state
+- simulate abnormal conditions
+- manage multiple instances simultaneously
+
+No Java.
+
+No React.
+
+No Spring.
+
+No database.
+
+Just what the system is supposed to do.
+
+This gives AI a stable target.
+
+⸻
+
+3. Then create the conceptual model
+
+This is where I think we should spend considerable time.
+
+Define the nouns in the system.
+
+For example:
+
+Platform
+Instance
+ITSP Connection
+ITSP Message
+Race
+Horse
+Race Event
+Scenario
+Simulation Clock
+Simulation State
+Test Run
+
+Then define their relationships:
+
+Platform
+   │
+   └── manages many Instances
+                    │
+                    ├── has one Configuration
+                    ├── has one Simulation Engine
+                    ├── has many Connections
+                    └── has many Races
+Race
+   │
+   ├── has many Horses
+   ├── produces Events
+   └── produces ITSP Messages
+
+This sounds simple, but it’s extremely important.
+
+AI needs to know whether, for example:
+
+Race
+
+is a child of:
+
+SimulatorInstance
+
+or whether it is some global object.
+
+We should explicitly decide.
+
+⸻
+
+4. Then define the state machines
+
+This project has several state machines.
+
+For example, instance:
+
+                 ┌─────────┐
+                 │ STOPPED │
+                 └────┬────┘
+                      │ start
+                      ▼
+                 ┌─────────┐
+                 │ STARTING│
+                 └────┬────┘
+                      │
+                      ▼
+                 ┌─────────┐
+                 │ RUNNING │
+                 └────┬────┘
+                      │ stop
+                      ▼
+                 ┌─────────┐
+                 │ STOPPING│
+                 └────┬────┘
+                      ▼
+                 ┌─────────┐
+                 │ STOPPED │
+                 └─────────┘
+
+Race:
+
+CREATED
+   ↓
+READY
+   ↓
+STARTING
+   ↓
+RUNNING
+   ↓
+FINISHED
+   ↓
+RESULT
+
+Connection:
+
+CONNECTING
+    ↓
+CONNECTED
+    ↓
+ACTIVE
+    ↓
+CLOSING
+    ↓
+CLOSED
+
+These states become extremely valuable later because AI can implement against an explicit model instead of inventing behavior.
+
+⸻
+
+5. Then define the architecture
+
+Only after the conceptual model is reasonably stable would I introduce technology.
+
+I’d make a document:
+
+docs/architecture/
+└── high-level-architecture.md
+
+Something like:
+
+                    Browser
+                       │
+                 HTTP/WebSocket
+                       │
+                       ▼
+              ┌──────────────────┐
+              │ Management       │
+              │ Web Application  │
+              └────────┬─────────┘
+                       │
+                       ▼
+              ┌──────────────────┐
+              │ Instance Manager │
+              └────────┬─────────┘
+                       │
+          ┌────────────┼────────────┐
+          ▼            ▼            ▼
+       Instance      Instance      Instance
+          │            │            │
+       TCP :9000    TCP :9001    TCP :9002
+          │            │            │
+       ITSP         ITSP         ITSP
+       Engine       Engine       Engine
+
+Then establish architectural principles:
+
+Principle A
+
+The management platform does not implement horse racing behavior itself.
+
+Principle B
+
+Every simulator instance is isolated from every other instance.
+
+Principle C
+
+The ITSP protocol layer is independent from the simulation engine.
+
+Principle D
+
+The Web UI never directly manipulates the simulation engine.
+
+Principle E
+
+The REST API and WebSocket API are the control/observation interfaces.
+
+These rules are more important than the exact technology.
+
+⸻
+
+6. Then create the technology architecture
+
+Now we can say:
+
+Backend
+Java 21
+Spring Boot
+Netty
+Maven
+Frontend
+React
+TypeScript
+Vite
+Persistence
+SQLite
+Realtime
+WebSocket
+Deployment
+Docker
+
+And map technology onto architecture:
+
+                    React
+                      │
+               REST / WebSocket
+                      │
+                      ▼
+              Spring Boot
+                      │
+               Application
+                  Layer
+                      │
+                InstanceManager
+                      │
+        ┌─────────────┼─────────────┐
+        ▼             ▼             ▼
+     Instance       Instance      Instance
+        │             │             │
+      Netty         Netty         Netty
+      :9000         :9001         :9002
+        │             │             │
+      ITSP          ITSP          ITSP
+
+This is the middle-level design you were talking about.
+
+And yes — I think that’s exactly the right next level after the high-level architecture.
+
+⸻
+
+7. Don’t design every class before coding
+
+This is where I would slightly modify your proposed approach.
+
+I would not do:
+
+High level
+    ↓
+Every class completely designed
+    ↓
+Every method completely designed
+    ↓
+Finally code
+
+That is too waterfall-like, especially when AI is involved.
+
+Instead:
+
+High-level architecture
+        ↓
+Middle-level architecture
+        ↓
+One small vertical slice
+        ↓
+Implement
+        ↓
+Run
+        ↓
+Learn
+        ↓
+Refine architecture
+        ↓
+Next slice
+
+This gives us continuous feedback from actual code.
+
+⸻
+
+8. The first code should be extremely small
+
+I would make the first milestone:
+
+Platform starts, web UI opens, and one empty simulator instance can be created and started on TCP port 9000.
+
+Nothing about horses yet.
+
+Nothing about ITSP race logic yet.
+
+The first system might literally demonstrate:
+
+Browser
+   │
+   ▼
+Web UI :8080
+   │
+   ▼
+POST /api/instances
+   │
+   ▼
+InstanceManager
+   │
+   ▼
+SimulatorInstance
+   │
+   ▼
+TCP :9000
+
+And you prove:
+
+$ netstat
+TCP 0.0.0.0:9000 LISTENING
+
+Then create:
+
+Instance 001 → :9000
+Instance 002 → :9001
+Instance 003 → :9002
+
+and prove all three work.
+
+That becomes Milestone 1.
+
+⸻
+
+9. Then build the ITSP protocol vertically
+
+Once instance management works, don’t implement 100 ITSP messages.
+
+Pick one complete ITSP interaction.
+
+For example:
+
+TCP connect
+     ↓
+ITSP handshake
+     ↓
+request
+     ↓
+response
+     ↓
+disconnect
+
+Make that work end-to-end:
+
+External ITSP Client
+        │
+        ▼
+   :9000 Instance
+        │
+        ▼
+ ITSP Decoder
+        │
+        ▼
+ Application
+        │
+        ▼
+ ITSP Encoder
+        │
+        ▼
+ External Client
+
+Then add the next protocol capability.
+
+This is much safer than generating the entire protocol layer in one shot.
+
+⸻
+
+10. Then introduce the simulation engine
+
+After protocol infrastructure is proven:
+
+ITSP
+ │
+ ▼
+Command
+ │
+ ▼
+Simulation Engine
+ │
+ ▼
+Domain Event
+ │
+ ├─────────────→ ITSP Response
+ │
+ └─────────────→ WebSocket → Browser
+
+Now you have the first genuinely interesting vertical slice:
+
+External system
+      │
+      │ ITSP
+      ▼
+Simulator :9000
+      │
+      ▼
+Race Engine
+      │
+      ▼
+Race Event
+      │
+      ├──────→ ITSP
+      │
+      └──────→ Web UI
+
+At that point you know the fundamental architecture actually works.
+
+⸻
+
+11. Then multiply the instances
+
+Only after one instance works well:
+
+Instance 001
+
+we prove:
+
+Instance 001 → :9000
+Instance 002 → :9001
+Instance 003 → :9002
+
+And verify:
+
+Instance 001
+    Race A
+Instance 002
+    Race B
+Instance 003
+    Race C
+
+simultaneously.
+
+This is an important architectural test.
+
+We need to make absolutely sure there is no accidental global state such as:
+
+static Race currentRace;
+
+which would cause Instance 002 to interfere with Instance 001.
+
+⸻
+
+12. Then build the operator UI progressively
+
+I’d build the UI in this order:
+
+Phase 1
+
+Instance list
+Create instance
+Start
+Stop
+Delete
+
+Phase 2
+
+Instance detail
+TCP status
+connections
+logs
+
+Phase 3
+
+Race configuration
+Race control
+Race state
+
+Phase 4
+
+Live race visualization
+ITSP message monitor
+
+Phase 5
+
+Scenario editor
+Failure injection
+Test execution
+
+This keeps the UI from becoming a huge project before the backend is stable.
+
+⸻
+
+13. The repository should mirror the architecture
+
+I would probably eventually end up with something approximately like:
+
+horse-host-simulator/
+│
+├── docs/
+│   ├── 00-product/
+│   │   ├── vision.md
+│   │   ├── requirements.md
+│   │   ├── concepts.md
+│   │   └── use-cases.md
+│   │
+│   ├── 01-architecture/
+│   │   ├── high-level.md
+│   │   ├── components.md
+│   │   ├── deployment.md
+│   │   └── decisions/
+│   │
+│   ├── 02-design/
+│   │   ├── instance-management.md
+│   │   ├── itsp.md
+│   │   ├── simulation.md
+│   │   ├── events.md
+│   │   └── websocket.md
+│   │
+│   └── 03-requirements/
+│
+├── backend/
+│   ├── pom.xml
+│   └── src/
+│
+├── frontend/
+│   ├── package.json
+│   └── src/
+│
+├── scenarios/
+│
+├── test/
+│
+├── docker/
+│
+└── README.md
+
+The exact structure can change after we see the actual ITSP requirements.
+
+⸻
+
+14. Give AI explicit development rules
+
+This is very important if AI is going to build most of it.
+
+I’d create:
+
+AGENTS.md
+
+or equivalent AI coding instructions.
+
+Something along these lines:
+
+# Project Development Rules
+## Architecture
+The system consists of:
+1. Management Platform
+2. Simulator Instance
+3. ITSP Protocol Layer
+4. Simulation Engine
+5. Web UI
+Simulator instances must be isolated.
+The ITSP protocol layer must not depend on the Web UI.
+The simulation engine must not depend on TCP.
+The domain model must not depend on Spring.
+## Development Rules
+Before modifying code:
+1. Read relevant architecture documents.
+2. Identify affected components.
+3. Do not introduce new architectural patterns without documenting them.
+When implementing a feature:
+1. Update the design document if necessary.
+2. Implement the smallest vertical slice.
+3. Add tests.
+4. Run the build.
+5. Verify behavior.
+Do not rewrite unrelated code.
+Do not introduce dependencies without justification.
+
+This is essentially giving the coding AI a constitution for the project.
+
+⸻
+
+15. Use Architecture Decision Records
+
+Whenever we make an important decision:
+
+docs/01-architecture/decisions/
+
+For example:
+
+ADR-001-java-spring-boot.md
+ADR-002-netty.md
+ADR-003-multi-instance-process-model.md
+ADR-004-react-web-ui.md
+ADR-005-instance-isolation.md
+ADR-006-simulation-clock.md
+
+Each is small:
+
+# ADR-005: Simulator Instance Isolation
+## Decision
+Each simulator instance owns its own simulation state,
+TCP listener, connection manager and race engine.
+## Reason
+Multiple instances must be able to operate independently.
+## Consequence
+No mutable simulator state may be stored globally.
+
+This is extremely AI-friendly.
+
+⸻
+
+16. Then use AI as several different “roles”
+
+I wouldn’t use AI only as a programmer.
+
+For this project, I would use AI as:
+
+             ┌─────────────────────┐
+             │     YOU             │
+             │ Product decisions   │
+             └──────────┬──────────┘
+                        │
+              ┌─────────▼─────────┐
+              │ Architecture AI   │
+              │ Design/review     │
+              └─────────┬─────────┘
+                        │
+              ┌─────────▼─────────┐
+              │ Coding AI         │
+              │ Implementation    │
+              └─────────┬─────────┘
+                        │
+              ┌─────────▼─────────┐
+              │ Testing AI        │
+              │ Verification      │
+              └─────────┬─────────┘
+                        │
+              ┌─────────▼─────────┐
+              │ Review AI         │
+              │ Architecture     │
+              │ conformance       │
+              └───────────────────┘
+
+You remain the system owner.
+
+AI does the mechanical work.
+
+⸻
+
+17. I would actually create a “project knowledge base”
+
+This fits your Markdown-as-source-code idea particularly well.
+
+Something like:
+
+docs/
+│
+├── requirements/
+├── concepts/
+├── architecture/
+├── design/
+├── protocol/
+├── scenarios/
+├── decisions/
+├── testing/
+└── implementation/
+
+Then the AI coding agent gets instructions like:
+
+Before implementing this feature, inspect the relevant documents under docs/. Treat those documents as the authoritative specification. If the implementation requires behavior that contradicts the specification, stop and report the contradiction rather than silently changing the design.
+
+That’s a very powerful development model.
+
+⸻
+
+18. The development roadmap I’d use
+
+I would divide the actual project into approximately these milestones:
+
+M0  Product definition
+ │
+ ├── requirements
+ ├── concepts
+ ├── use cases
+ └── terminology
+M1  Architecture
+ │
+ ├── system architecture
+ ├── component boundaries
+ ├── instance model
+ └── technology decisions
+M2  Executable skeleton
+ │
+ ├── Spring Boot
+ ├── React
+ ├── REST
+ └── WebSocket
+M3  Instance management
+ │
+ ├── create
+ ├── start
+ ├── stop
+ ├── delete
+ └── multiple TCP ports
+M4  ITSP foundation
+ │
+ ├── TCP
+ ├── framing
+ ├── decoder
+ ├── encoder
+ └── session
+M5  First ITSP workflow
+ │
+ └── complete end-to-end protocol scenario
+M6  Simulation engine
+ │
+ ├── race
+ ├── horse
+ ├── state machine
+ ├── clock
+ └── events
+M7  ITSP ↔ Simulation
+ │
+ └── protocol controls simulator
+M8  Multi-instance validation
+ │
+ └── simultaneous independent races
+M9  Web operator console
+ │
+ ├── dashboards
+ ├── live state
+ ├── messages
+ └── connections
+M10 Scenario system
+ │
+ ├── normal
+ ├── delay
+ ├── failure
+ └── malformed protocol
+M11 Automated testing
+ │
+ ├── protocol tests
+ ├── simulation tests
+ ├── integration tests
+ └── multi-instance tests
+M12 Packaging/deployment
+ │
+ ├── Docker
+ ├── configuration
+ └── CI/CD
+
+Notice something important:
+
+We don’t start with MUI, animations, fancy race graphics, Docker, etc.
+
+The first goal is proving the core architecture.
+
+⸻
+
+19. The most important AI rule: never ask for too much code at once
+
+Instead of:
+
+Build the complete host simulator platform.
+
+we should give AI tasks like:
+
+Implement M3.1: Create a SimulatorInstance domain object according to docs/02-design/instance-management.md. It must not contain Spring-specific code. Add unit tests. Do not implement TCP yet.
+
+Then:
+
+Implement M3.2: Add InstanceManager according to the design. It must support creating and removing instances. Do not implement persistence or UI yet.
+
+Then:
+
+Implement M3.3: Add a TCP listener to SimulatorInstance. Port allocation must be controlled by InstanceManager.
+
+Then:
+
+Implement the REST endpoints described in…
+
+And so on.
+
+Each task is small enough that AI can reason about the whole affected area.
+
+⸻
+
+20. And I would make the build itself the judge
+
+Every milestone should have a concrete acceptance test.
+
+For example:
+
+M3 acceptance
+
+Given:
+No simulator instances exist.
+When:
+Operator creates three instances.
+Then:
+Instance 001 listens on 9000.
+Instance 002 listens on 9001.
+Instance 003 listens on 9002.
+When:
+Instance 002 is stopped.
+Then:
+9001 is no longer listening.
+And:
+9000 and 9002 remain operational.
+
+This is far better than:
+
+“The instance manager seems to work.”
+
+AI can write tests directly from these acceptance criteria.
+
+⸻
+
+21. This is where your “Markdown as source code” idea becomes powerful
+
+For this project, I would actually make the hierarchy:
+
+                    REQUIREMENTS
+                         │
+                         ▼
+                    CONCEPT MODEL
+                         │
+                         ▼
+                 ARCHITECTURE SPEC
+                         │
+                         ▼
+                   DESIGN SPECS
+                         │
+                         ▼
+                  IMPLEMENTATION
+                         │
+                         ▼
+                      TESTS
+                         │
+                         ▼
+                     SOFTWARE
+
+And each lower layer must be traceable to the layer above it.
+
+For example:
+
+REQ-023
+"Platform shall support multiple simulator instances."
+        ↓
+ARCH-007
+"InstanceManager owns the lifecycle of all instances."
+        ↓
+DESIGN-014
+"SimulatorInstance contains TcpServer, RaceEngine,
+ConnectionManager and SimulationContext."
+        ↓
+CODE
+InstanceManager.java
+SimulatorInstance.java
+...
+        ↓
+TEST
+MultipleInstanceIntegrationTest.java
+
+That is much closer to AI-native software engineering than conventional “open IDE → create classes → start coding.”
+
+⸻
+
+What I would do next
+
+I think we should not write any Java yet.
+
+I would propose that we start a dedicated Project Definition / Architecture phase together.
+
+Specifically, we can build these documents in order:
+
+1. Product Vision
+2. Functional Requirements
+3. Core Concepts / Domain Model
+4. Major Use Cases
+5. High-Level Architecture
+6. Component Architecture
+7. Instance Lifecycle
+8. ITSP Protocol Architecture
+9. Simulation Engine Architecture
+10. Web/API Architecture
+11. Data/Persistence Architecture
+12. Deployment Architecture
+13. Testing Strategy
+14. AI Development Rules
+15. Initial implementation roadmap
+
+Then, only when those are coherent, we tell the coding AI:
+
+Build Milestone M2 from the architecture specification.
+
+I think this is the right approach for you specifically because you’re not merely trying to get an application working—you are experimenting with a way of having AI construct a fairly substantial software system from a structured Markdown specification. This horse-host simulator is actually an excellent project for proving that methodology.
+
+
+
