@@ -1,5 +1,6 @@
 
 
+
 For monitoring my GitHub copilot cli working status and my CDP enabled browser working status with m365 copilot web chat on it, on my corporation dev vm, I am thinking of an app or service playing as a baby sitting role, what kind of such service or app I should develop? Do you understand what I am talking about and what I want?
 
 
@@ -836,3 +837,574 @@ Action:
 That is exactly the kind of “babysitter” experience I think you’re describing.
 
 And importantly, your existing Copilot CLI → M365 wrapper → M365 Web Chat workflow remains the primary system and doesn’t need to know that the Guardian exists. The Guardian is simply standing beside it, watching over it and taking responsibility for the environment when something goes wrong.
+
+
+So what is the form of such a supervisor will be? A windows desktop app or some kind of a service? What’s the proper technology stack for designing and developing it?
+
+
+Yes. Given your setup, I would not make it primarily a Windows desktop app. I would make it a Windows background service/daemon with a small local web UI.
+
+That gives you the best separation between the thing that babysits the environment and the thing you use to look at the babysitter.
+
+My recommended form
+
+                Windows Dev VM
+┌─────────────────────────────────────────────────────────┐
+│                                                         │
+│   GitHub Copilot CLI                                    │
+│          │                                              │
+│          ▼                                              │
+│   M365 Wrapper :8787                                    │
+│          │                                              │
+│          ▼                                              │
+│   Edge / M365 Copilot                                  │
+│          │                                              │
+│         CDP :9222                                      │
+│                                                         │
+│  ┌───────────────────────────────────────────────────┐  │
+│  │           AI Coding Supervisor                    │  │
+│  │                                                   │  │
+│  │  Process Monitor                                 │  │
+│  │  CDP Monitor                                     │  │
+│  │  Browser Monitor                                 │  │
+│  │  M365 Session Monitor                            │  │
+│  │  Progress Detector                               │  │
+│  │  Recovery Manager                                │  │
+│  │  Event/State Store                               │  │
+│  └──────────────────────┬────────────────────────────┘  │
+│                         │                                │
+│                         ▼                                │
+│                  localhost HTTP API                      │
+│                         │                                │
+│                         ▼                                │
+│              ┌─────────────────────┐                    │
+│              │ Web Dashboard        │                    │
+│              │ http://127.0.0.1:... │                    │
+│              └─────────────────────┘                    │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+
+So conceptually it is:
+
+Windows service + local control plane + browser-based dashboard
+
+rather than:
+
+Windows GUI application that happens to run in the background.
+
+⸻
+
+Why I prefer a service
+
+Your babysitter has to keep working even when you’re not looking at it.
+
+Imagine:
+
+You RDP into VM
+       ↓
+start Copilot CLI
+       ↓
+start your normal work
+       ↓
+disconnect RDP
+       ↓
+Copilot continues working
+       ↓
+M365 authentication expires
+       ↓
+Supervisor notices
+       ↓
+Supervisor recovers it
+       ↓
+Copilot continues
+
+A desktop application’s UI lifecycle is irrelevant to that.
+
+The supervisor itself should have no dependency on:
+
+* an open RDP session
+* a visible desktop
+* a particular user interface
+* you actively watching it
+
+The UI is just a view into the supervisor.
+
+⸻
+
+But I would NOT necessarily use a traditional Windows Service initially
+
+There is an important Windows complication in your case.
+
+Your supervisor needs to interact with:
+
+* Edge
+* an existing browser profile
+* CDP
+* M365 web pages
+* possibly interactive authentication
+* potentially Windows certificate authentication
+* the user’s desktop session
+
+A traditional Windows Service runs in Session 0, while Edge and your interactive browser live in your user’s Windows session.
+
+That makes GUI/browser interaction awkward.
+
+So I would initially make it a:
+
+per-user background agent
+
+that starts automatically when your development Windows account logs in.
+
+Later, if necessary, split it into:
+
+Windows Service
+      │
+      │ system-level monitoring
+      ▼
+User-session Supervisor Agent
+      │
+      ├── Edge
+      ├── CDP
+      └── M365
+
+But don’t introduce that complexity in V1.
+
+⸻
+
+Technology stack
+
+For you, my strongest recommendation would be:
+
+TypeScript + Node.js
+
+Specifically:
+
+Runtime:       Node.js
+Language:      TypeScript
+Browser:       Playwright
+HTTP:          Fastify
+UI:            React + Vite
+State:         in-memory initially
+Persistence:   SQLite later
+Logging:       Pino
+Configuration: YAML
+Packaging:     Windows executable / service wrapper
+
+And there is a very good reason for this choice:
+
+you already have webai-gateway written in TypeScript/Node/Playwright.
+
+You don’t need to introduce another programming ecosystem merely to build the supervisor.
+
+⸻
+
+I would structure the project like this
+
+Something along these lines:
+
+ai-coding-supervisor/
+│
+├── src/
+│   ├── app/
+│   │   ├── main.ts
+│   │   ├── server.ts
+│   │   └── config.ts
+│   │
+│   ├── core/
+│   │   ├── supervisor.ts
+│   │   ├── state-machine.ts
+│   │   ├── events.ts
+│   │   └── health.ts
+│   │
+│   ├── monitors/
+│   │   ├── copilot-cli/
+│   │   ├── wrapper/
+│   │   ├── edge/
+│   │   ├── cdp/
+│   │   └── m365/
+│   │
+│   ├── recovery/
+│   │   ├── recovery-manager.ts
+│   │   ├── browser-recovery.ts
+│   │   └── auth-recovery.ts
+│   │
+│   ├── integrations/
+│   │   ├── copilot.ts
+│   │   ├── edge.ts
+│   │   └── m365.ts
+│   │
+│   ├── api/
+│   │   ├── routes.ts
+│   │   └── websocket.ts
+│   │
+│   └── storage/
+│       └── ...
+│
+├── web/
+│   ├── src/
+│   └── ...
+│
+├── config/
+│   └── supervisor.yaml
+│
+├── data/
+│   ├── logs/
+│   └── events/
+│
+└── package.json
+
+Notice that there is no M365 wrapper code in here.
+
+It communicates with your existing wrapper rather than absorbing it.
+
+⸻
+
+The most important component is the state machine
+
+I wouldn’t start with the dashboard.
+
+I’d start with this:
+
+                 Supervisor
+                     │
+                     ▼
+              State Machine
+                     │
+        ┌────────────┼────────────┐
+        ▼            ▼            ▼
+     COPILOT       BROWSER       M365
+     state         state         state
+        │            │            │
+        └────────────┼────────────┘
+                     ▼
+               Overall State
+
+For example:
+
+IDLE
+STARTING
+WORKING
+WAITING_FOR_RESPONSE
+BROWSER_UNAVAILABLE
+CDP_DISCONNECTED
+M365_AUTH_REQUIRED
+M365_GENERATING
+M365_STALLED
+WRAPPER_UNAVAILABLE
+COPILOT_EXITED
+RECOVERING
+WAITING_FOR_USER
+FAILED
+COMPLETED
+
+This becomes the brain of the babysitter.
+
+⸻
+
+Use an event-driven architecture
+
+Instead of having one giant loop:
+
+while (true) {
+   checkEverything();
+   sleep();
+}
+
+I’d eventually build it around events:
+
+CopilotOutputReceived
+CDPConnected
+CDPDisconnected
+M365PageFound
+M365AuthRequired
+M365AuthRestored
+M365GenerationStarted
+M365GenerationCompleted
+WrapperRequestStarted
+WrapperRequestCompleted
+WrapperRequestTimedOut
+CopilotExited
+
+Then:
+
+event
+  ↓
+state machine
+  ↓
+new state
+  ↓
+policy evaluation
+  ↓
+optional recovery
+
+This will make the project dramatically easier to extend.
+
+⸻
+
+Playwright is particularly appropriate
+
+You already use Playwright in the wrapper.
+
+The supervisor can connect to the existing Edge instance through CDP rather than launching another browser:
+
+Supervisor
+    │
+    │ CDP
+    ▼
+Edge :9222
+    │
+    ├── M365 Copilot tab
+    ├── other tabs
+    └── ...
+
+It can inspect things such as:
+
+Is the M365 page there?
+Is the composer present?
+Is the user logged in?
+Is a login page displayed?
+Is the response generation indicator present?
+Is the page responsive?
+Has the page navigated unexpectedly?
+
+That is much better than trying to infer browser health from process existence alone.
+
+⸻
+
+Fastify for the local control plane
+
+I’d expose something like:
+
+GET /api/status
+GET /api/state
+GET /api/events
+GET /api/health
+GET /api/copilot
+GET /api/browser
+GET /api/m365
+GET /api/recovery
+
+And eventually:
+
+POST /api/actions/reconnect-cdp
+POST /api/actions/recover-m365
+POST /api/actions/restart-wrapper
+POST /api/actions/acknowledge
+
+But I’d initially make most of the action APIs read-only or manually triggered.
+
+⸻
+
+WebSocket/SSE for the dashboard
+
+You don’t want the dashboard constantly polling.
+
+Instead:
+
+Supervisor
+     │
+     │ events
+     ▼
+WebSocket / SSE
+     │
+     ▼
+Dashboard
+
+Then your dashboard can update immediately:
+
+20:42:01  🟢 Copilot working
+20:42:14  🟢 M365 response generating
+20:43:02  ⚠ No response activity
+20:43:32  🟠 Possible M365 stall
+20:44:02  🔴 Authentication required
+20:44:03  🔧 Starting authentication recovery
+20:44:17  🟢 Authentication restored
+
+⸻
+
+SQLite is enough for persistence
+
+Don’t introduce PostgreSQL, Redis, MongoDB, etc.
+
+This is a single-machine supervisor.
+
+SQLite is ideal.
+
+You could store:
+
+sessions
+events
+state_transitions
+recovery_attempts
+errors
+
+For example:
+
+2026-09-18 20:42:01
+COPILOT_WORKING
+2026-09-18 20:43:32
+M365_STALLED
+2026-09-18 20:44:02
+AUTH_REQUIRED
+2026-09-18 20:44:17
+AUTH_RESTORED
+
+That gives you historical diagnosis without creating infrastructure.
+
+⸻
+
+One thing I would deliberately NOT build
+
+Don’t make the supervisor another AI coding agent.
+
+Avoid:
+
+Supervisor
+   ↓
+LLM
+   ↓
+"Let's inspect the system"
+   ↓
+LLM executes arbitrary commands
+
+at least initially.
+
+Instead:
+
+Sensors
+   ↓
+Deterministic state
+   ↓
+Rules
+   ↓
+Safe recovery
+
+Later you can add:
+
+                    ┌─────────────┐
+                    │ Deterministic│
+                    │ Supervisor  │
+                    └──────┬──────┘
+                           │
+                     problem detected
+                           │
+                           ▼
+                    ┌─────────────┐
+                    │ Diagnostic  │
+                    │ LLM         │
+                    └─────────────┘
+
+The LLM can answer:
+
+“Why does this look stuck?”
+
+but shouldn’t be responsible for deciding whether to kill your browser.
+
+⸻
+
+And I would give it a CLI too
+
+The web UI is for watching.
+
+A CLI is useful for administration:
+
+aicoding status
+aicoding events
+aicoding watch
+aicoding recover m365
+aicoding browser status
+aicoding copilot status
+
+So the architecture becomes:
+
+                   Supervisor Core
+                         │
+             ┌───────────┼───────────┐
+             │           │           │
+          Web API       CLI        Logs
+             │
+             ▼
+        Web Dashboard
+
+The core doesn’t care which interface is being used.
+
+⸻
+
+My recommended V1 technology stack
+
+Component	Choice
+Language	TypeScript
+Runtime	Node.js
+Browser/CDP	Playwright
+HTTP server	Fastify
+Live events	WebSocket or SSE
+Dashboard	React + Vite
+Persistence	SQLite
+Logging	Pino
+Configuration	YAML
+Process monitoring	Node + Windows APIs/commands
+Packaging	Windows executable / startup mechanism
+Deployment	Per-user background agent initially
+
+And architecturally:
+
+                 ┌───────────────────────────┐
+                 │     Supervisor Core       │
+                 │                           │
+                 │ State Machine             │
+                 │ Event Bus                 │
+                 │ Policy Engine             │
+                 │ Recovery Manager           │
+                 └─────────────┬─────────────┘
+                               │
+          ┌────────────────────┼───────────────────┐
+          │                    │                   │
+          ▼                    ▼                   ▼
+    Process Monitors      Browser/CDP        M365 Monitor
+          │                    │                   │
+          ▼                    ▼                   ▼
+    Copilot CLI             Edge :9222       M365 Web Chat
+          │
+          ▼
+    M365 Wrapper :8787
+               ┌─────────────────────────┐
+               │     Control Plane       │
+               │                         │
+               │ REST + WebSocket/SSE    │
+               └────────────┬────────────┘
+                            │
+                     ┌──────┴──────┐
+                     ▼             ▼
+                  Browser         CLI
+                  Dashboard       Admin
+
+The most important design decision
+
+I would establish this boundary from day one:
+
+webai-gateway
+
+“Make M365 Web Chat behave like an API.”
+
+ai-coding-supervisor
+
+“Make the environment in which the AI coding agent operates stay healthy.”
+
+That means your existing working path stays untouched:
+
+Copilot CLI → webai-gateway → Edge/CDP → M365 Copilot
+
+while the new program simply watches beside it and, when explicitly permitted, repairs the environment.
+
+I think that is the cleanest architecture for what you’re trying to build.
+
+
+
+
+
+
+
+
+
+
+end
