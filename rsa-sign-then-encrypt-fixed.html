@@ -1,0 +1,720 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RSA Sign-Then-Encrypt</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #5e6b82;
+      --border: #d9dfeb;
+      --accent: #2563eb;
+      --danger: #b91c1c;
+      --ok: #166534;
+      --code: #101827;
+      --code-text: #e6edf7;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1420;
+        --panel: #151d2b;
+        --text: #eef3fb;
+        --muted: #a8b3c5;
+        --border: #2c384c;
+        --accent: #60a5fa;
+        --danger: #fca5a5;
+        --ok: #86efac;
+        --code: #0a0f18;
+        --code-text: #e6edf7;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .wrap {
+      width: min(1200px, 94vw);
+      margin: 28px auto 48px;
+    }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    .sub { color: var(--muted); margin: 0 0 24px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+    .full { grid-column: 1 / -1; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 5px 20px rgba(0,0,0,.05);
+    }
+    label {
+      display: block;
+      font-weight: 700;
+      margin-bottom: 7px;
+    }
+    textarea, input, select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 10px 12px;
+      font: inherit;
+      background: transparent;
+      color: inherit;
+    }
+    textarea {
+      min-height: 170px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    #message { min-height: 210px; font-family: inherit; font-size: 14px; }
+    #output { min-height: 390px; background: var(--code); color: var(--code-text); }
+    .hint {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 7px;
+      line-height: 1.45;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+    button {
+      border: 0;
+      border-radius: 9px;
+      padding: 10px 16px;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 700;
+    }
+    .primary { background: var(--accent); color: white; }
+    .secondary { background: transparent; color: inherit; border: 1px solid var(--border); }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    .status {
+      min-height: 22px;
+      margin-top: 12px;
+      white-space: pre-wrap;
+      font-size: 13px;
+    }
+    .ok { color: var(--ok); }
+    .error { color: var(--danger); }
+    .flow {
+      margin: 0;
+      padding-left: 20px;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .92em;
+    }
+    .keyinfo {
+      margin-top: 10px;
+      padding: 9px 11px;
+      border-radius: 8px;
+      background: rgba(127,127,127,.08);
+      color: var(--muted);
+      font-size: 12px;
+      white-space: pre-wrap;
+    }
+    @media (max-width: 850px) {
+      .grid, .row { grid-template-columns: 1fr; }
+      .full { grid-column: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>RSA Sign-Then-Encrypt</h1>
+    <p class="sub">
+      Browser-only cryptography. This page supports PKCS#1 and PKCS#8 private keys,
+      and SPKI and PKCS#1 public keys.
+    </p>
+
+    <div class="grid">
+      <section class="card">
+        <label for="signingPrivateKey">Sender signing private key</label>
+        <textarea id="signingPrivateKey" spellcheck="false"
+          placeholder="-----BEGIN RSA PRIVATE KEY-----
+...
+-----END RSA PRIVATE KEY-----"></textarea>
+        <div class="hint">
+          Supported: <code>BEGIN RSA PRIVATE KEY</code> (PKCS#1),
+          <code>BEGIN PRIVATE KEY</code> (PKCS#8), and
+          <code>BEGIN ENCRYPTED PRIVATE KEY</code> is not supported because a password would be required.
+        </div>
+        <div id="privateKeyInfo" class="keyinfo">Private-key format: not detected</div>
+      </section>
+
+      <section class="card">
+        <label for="encryptionPublicKey">Recipient RSA encryption public key</label>
+        <textarea id="encryptionPublicKey" spellcheck="false"
+          placeholder="-----BEGIN PUBLIC KEY-----
+...
+-----END PUBLIC KEY-----"></textarea>
+        <div class="hint">
+          Supported: <code>BEGIN PUBLIC KEY</code> (SPKI) and
+          <code>BEGIN RSA PUBLIC KEY</code> (PKCS#1).
+        </div>
+        <div id="publicKeyInfo" class="keyinfo">Public-key format: not detected</div>
+      </section>
+
+      <section class="card full">
+        <div class="row">
+          <div>
+            <label for="signatureAlgorithm">Digital signature algorithm</label>
+            <select id="signatureAlgorithm">
+              <option value="RSA-PSS">RSA-PSS / SHA-256 / salt 32 bytes</option>
+              <option value="RSASSA-PKCS1-v1_5">RSASSA-PKCS1-v1_5 / SHA-256</option>
+            </select>
+          </div>
+          <div>
+            <label for="outputMode">Output format</label>
+            <select id="outputMode">
+              <option value="pretty">Pretty JSON</option>
+              <option value="compact">Compact JSON</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section class="card full">
+        <label for="message">Original message</label>
+        <textarea id="message" placeholder="Type or paste the original message here..."></textarea>
+        <div class="actions">
+          <button id="encryptBtn" class="primary">Sign Then Encrypt</button>
+          <button id="clearBtn" class="secondary">Clear</button>
+          <button id="copyBtn" class="secondary" disabled>Copy Output</button>
+          <button id="downloadBtn" class="secondary" disabled>Download JSON</button>
+        </div>
+        <div id="status" class="status"></div>
+      </section>
+
+      <section class="card full">
+        <label for="output">Final signed + encrypted message</label>
+        <textarea id="output" readonly spellcheck="false"
+          placeholder="The final JSON envelope will appear here..."></textarea>
+        <div class="hint">
+          <strong>Sign first, then encrypt:</strong> the signature is computed over the original
+          message, then the message + signature are encrypted with AES-GCM. The AES key is wrapped
+          with the recipient's RSA-OAEP public key.
+        </div>
+      </section>
+
+      <section class="card full">
+        <label>Cryptographic flow</label>
+        <ol class="flow">
+          <li>UTF-8 encode the original message.</li>
+          <li>Sign the original message with the sender RSA private key.</li>
+          <li>Generate a random 256-bit AES-GCM key and 96-bit IV.</li>
+          <li>Build a payload containing the original message and its RSA signature.</li>
+          <li>Encrypt that payload with AES-256-GCM.</li>
+          <li>Wrap the AES key with the recipient RSA public key using RSA-OAEP/SHA-256.</li>
+          <li>Return the JSON envelope.</li>
+        </ol>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    "use strict";
+
+    const $ = (id) => document.getElementById(id);
+    let lastOutput = "";
+
+    function setStatus(message, kind = "") {
+      const el = $("status");
+      el.textContent = message;
+      el.className = "status" + (kind ? " " + kind : "");
+    }
+
+    function cleanPem(pem) {
+      const text = String(pem || "").trim();
+      const match = text.match(
+        /-----BEGIN ([^-]+)-----([\s\S]*?)-----END \1-----/
+      );
+      if (!match) {
+        throw new Error("Invalid PEM: BEGIN/END lines were not found.");
+      }
+
+      const label = match[1].trim();
+      const b64 = match[2].replace(/\s+/g, "");
+
+      if (!b64) {
+        throw new Error("PEM contains no Base64 data.");
+      }
+
+      let binary;
+      try {
+        binary = atob(b64);
+      } catch {
+        throw new Error("PEM contains invalid Base64 data.");
+      }
+
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+
+      return { label, bytes };
+    }
+
+    function base64url(bytes) {
+      let binary = "";
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+      }
+      return btoa(binary)
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/g, "");
+    }
+
+    function arrayBufferToBase64(buffer) {
+      return base64url(new Uint8Array(buffer))
+        .replace(/-/g, "+")
+        .replace(/_/g, "/")
+        .padEnd(Math.ceil(buffer.byteLength / 3) * 4, "=");
+    }
+
+    function bytesToBase64(bytes) {
+      return arrayBufferToBase64(bytes.buffer);
+    }
+
+    /*
+     * Minimal DER reader for RSA PKCS#1.
+     * It deliberately supports the INTEGER/SEQUENCE structures needed for:
+     *   RSAPrivateKey ::= SEQUENCE {
+     *      version, modulus, publicExponent, privateExponent,
+     *      prime1, prime2, exponent1, exponent2, coefficient
+     *   }
+     *   RSAPublicKey ::= SEQUENCE { modulus, publicExponent }
+     */
+    class DerReader {
+      constructor(bytes) {
+        this.bytes = bytes;
+        this.pos = 0;
+      }
+
+      readByte() {
+        if (this.pos >= this.bytes.length) throw new Error("Unexpected end of DER.");
+        return this.bytes[this.pos++];
+      }
+
+      readLength() {
+        const first = this.readByte();
+        if ((first & 0x80) === 0) return first;
+
+        const count = first & 0x7f;
+        if (count === 0 || count > 4) {
+          throw new Error("Unsupported DER length.");
+        }
+
+        let length = 0;
+        for (let i = 0; i < count; i++) {
+          length = (length << 8) | this.readByte();
+        }
+        return length;
+      }
+
+      readTLV(expectedTag) {
+        const tag = this.readByte();
+        if (tag !== expectedTag) {
+          throw new Error(
+            "Unexpected DER tag 0x" + tag.toString(16) +
+            ", expected 0x" + expectedTag.toString(16) + "."
+          );
+        }
+
+        const length = this.readLength();
+        const end = this.pos + length;
+        if (end > this.bytes.length) {
+          throw new Error("DER object is truncated.");
+        }
+
+        const value = this.bytes.slice(this.pos, end);
+        this.pos = end;
+        return value;
+      }
+
+      readSequence() {
+        return new DerReader(this.readTLV(0x30));
+      }
+
+      readInteger() {
+        const value = this.readTLV(0x02);
+        let start = 0;
+
+        // DER INTEGER is signed; RSA values are positive, so remove one
+        // leading 00 sign byte when present.
+        while (start < value.length - 1 && value[start] === 0) start++;
+
+        return value.slice(start);
+      }
+    }
+
+    function pkcs1PrivateToJwk(bytes) {
+      const seq = new DerReader(bytes).readSequence();
+      const version = seq.readInteger();
+
+      // version must be 0 for the ordinary two-prime RSA private-key form.
+      if (version.length !== 1 || version[0] !== 0) {
+        throw new Error("Unsupported PKCS#1 RSA private-key version.");
+      }
+
+      const n = seq.readInteger();
+      const e = seq.readInteger();
+      const d = seq.readInteger();
+      const p = seq.readInteger();
+      const q = seq.readInteger();
+      const dp = seq.readInteger();
+      const dq = seq.readInteger();
+      const qi = seq.readInteger();
+
+      return {
+        kty: "RSA",
+        n: base64url(n),
+        e: base64url(e),
+        d: base64url(d),
+        p: base64url(p),
+        q: base64url(q),
+        dp: base64url(dp),
+        dq: base64url(dq),
+        qi: base64url(qi),
+        ext: true
+      };
+    }
+
+    function pkcs1PublicToJwk(bytes) {
+      const seq = new DerReader(bytes).readSequence();
+      const n = seq.readInteger();
+      const e = seq.readInteger();
+
+      return {
+        kty: "RSA",
+        n: base64url(n),
+        e: base64url(e),
+        ext: true
+      };
+    }
+
+    async function importSigningPrivateKey(pem, algorithmName) {
+      const { label, bytes } = cleanPem(pem);
+
+      $("privateKeyInfo").textContent =
+        "Private-key format: " + label;
+
+      const algorithm = {
+        name: algorithmName,
+        hash: "SHA-256"
+      };
+
+      if (label === "RSA PRIVATE KEY") {
+        // Browser Web Crypto does not directly import PKCS#1 via "pkcs8",
+        // so convert the RSA PKCS#1 structure to JWK first.
+        const jwk = pkcs1PrivateToJwk(bytes);
+        return crypto.subtle.importKey(
+          "jwk",
+          jwk,
+          algorithm,
+          false,
+          ["sign"]
+        );
+      }
+
+      if (label === "PRIVATE KEY") {
+        return crypto.subtle.importKey(
+          "pkcs8",
+          bytes.buffer,
+          algorithm,
+          false,
+          ["sign"]
+        );
+      }
+
+      if (label === "ENCRYPTED PRIVATE KEY") {
+        throw new Error(
+          "Encrypted PKCS#8 private keys are not supported by this page. " +
+          "Please provide the decrypted private key or a PKCS#1/PKCS#8 key that is not password-encrypted."
+        );
+      }
+
+      throw new Error(
+        "Unsupported private-key PEM label: " + label +
+        ". Use RSA PRIVATE KEY or PRIVATE KEY."
+      );
+    }
+
+    async function importEncryptionPublicKey(pem) {
+      const { label, bytes } = cleanPem(pem);
+
+      $("publicKeyInfo").textContent =
+        "Public-key format: " + label;
+
+      if (label === "RSA PUBLIC KEY") {
+        const jwk = pkcs1PublicToJwk(bytes);
+        return crypto.subtle.importKey(
+          "jwk",
+          jwk,
+          {
+            name: "RSA-OAEP",
+            hash: "SHA-256"
+          },
+          false,
+          ["encrypt", "wrapKey"]
+        );
+      }
+
+      if (label === "PUBLIC KEY") {
+        return crypto.subtle.importKey(
+          "spki",
+          bytes.buffer,
+          {
+            name: "RSA-OAEP",
+            hash: "SHA-256"
+          },
+          false,
+          ["encrypt", "wrapKey"]
+        );
+      }
+
+      throw new Error(
+        "Unsupported public-key PEM label: " + label +
+        ". Use PUBLIC KEY or RSA PUBLIC KEY."
+      );
+    }
+
+    async function signMessage(privateKey, messageBytes, algorithmName) {
+      if (algorithmName === "RSA-PSS") {
+        return crypto.subtle.sign(
+          { name: "RSA-PSS", saltLength: 32 },
+          privateKey,
+          messageBytes
+        );
+      }
+
+      return crypto.subtle.sign(
+        { name: "RSASSA-PKCS1-v1_5" },
+        privateKey,
+        messageBytes
+      );
+    }
+
+    async function signThenEncrypt() {
+      if (!window.crypto?.subtle) {
+        throw new Error("Web Crypto API is unavailable in this browser.");
+      }
+
+      const privateKeyPem = $("signingPrivateKey").value.trim();
+      const publicKeyPem = $("encryptionPublicKey").value.trim();
+      const message = $("message").value;
+      const signatureAlgorithm = $("signatureAlgorithm").value;
+
+      if (!privateKeyPem) {
+        throw new Error("Enter the sender signing private key.");
+      }
+      if (!publicKeyPem) {
+        throw new Error("Enter the recipient encryption public key.");
+      }
+
+      // 1. Import both RSA keys.
+      const privateKey = await importSigningPrivateKey(
+        privateKeyPem,
+        signatureAlgorithm
+      );
+      const publicKey = await importEncryptionPublicKey(publicKeyPem);
+
+      const messageBytes = new TextEncoder().encode(message);
+
+      // 2. SIGN THE ORIGINAL MESSAGE FIRST.
+      const signature = await signMessage(
+        privateKey,
+        messageBytes,
+        signatureAlgorithm
+      );
+
+      // 3. Generate a random symmetric key and IV.
+      const aesKey = await crypto.subtle.generateKey(
+        { name: "AES-GCM", length: 256 },
+        true,
+        ["encrypt", "decrypt"]
+      );
+
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+
+      // 4. Put the original message and signature into the signed payload.
+      const signedPayload = JSON.stringify({
+        message,
+        signature: arrayBufferToBase64(signature),
+        signatureAlgorithm:
+          signatureAlgorithm === "RSA-PSS"
+            ? "RSA-PSS-SHA256-salt32"
+            : "RSASSA-PKCS1-v1_5-SHA256"
+      });
+
+      // 5. Encrypt the signed payload.
+      const ciphertext = await crypto.subtle.encrypt(
+        {
+          name: "AES-GCM",
+          iv
+        },
+        aesKey,
+        new TextEncoder().encode(signedPayload)
+      );
+
+      // 6. Wrap the AES key with recipient's RSA-OAEP public key.
+      const wrappedKey = await crypto.subtle.wrapKey(
+        "raw",
+        aesKey,
+        publicKey,
+        { name: "RSA-OAEP" }
+      );
+
+      // 7. Final transport envelope.
+      const envelope = {
+        version: 1,
+        scheme:
+          "RSA-OAEP-SHA256 + AES-256-GCM + " +
+          (signatureAlgorithm === "RSA-PSS"
+            ? "RSA-PSS-SHA256"
+            : "RSASSA-PKCS1-v1_5-SHA256"),
+        operation: "sign-then-encrypt",
+        encryptedKey: arrayBufferToBase64(wrappedKey),
+        iv: bytesToBase64(iv),
+        ciphertext: arrayBufferToBase64(ciphertext)
+      };
+
+      const output = $("outputMode").value === "pretty"
+        ? JSON.stringify(envelope, null, 2)
+        : JSON.stringify(envelope);
+
+      $("output").value = output;
+      lastOutput = output;
+      $("copyBtn").disabled = false;
+      $("downloadBtn").disabled = false;
+
+      return envelope;
+    }
+
+    $("encryptBtn").addEventListener("click", async () => {
+      $("encryptBtn").disabled = true;
+      $("copyBtn").disabled = true;
+      $("downloadBtn").disabled = true;
+      setStatus("Importing keys, signing, and encrypting locally...");
+
+      try {
+        await signThenEncrypt();
+
+        setStatus(
+          "Success. The original message was signed first, then the signed payload was encrypted.",
+          "ok"
+        );
+
+        $("copyBtn").disabled = false;
+        $("downloadBtn").disabled = false;
+      } catch (err) {
+        console.error(err);
+
+        let detail = err?.message || String(err);
+        if (err?.name) {
+          detail = err.name + ": " + detail;
+        }
+
+        setStatus("Error: " + detail, "error");
+        $("output").value = "";
+        lastOutput = "";
+      } finally {
+        $("encryptBtn").disabled = false;
+      }
+    });
+
+    $("copyBtn").addEventListener("click", async () => {
+      if (!lastOutput) return;
+
+      try {
+        await navigator.clipboard.writeText(lastOutput);
+        setStatus("Output copied to clipboard.", "ok");
+      } catch {
+        $("output").focus();
+        $("output").select();
+        document.execCommand("copy");
+        setStatus("Output copied to clipboard.", "ok");
+      }
+    });
+
+    $("downloadBtn").addEventListener("click", () => {
+      if (!lastOutput) return;
+
+      const blob = new Blob(
+        [lastOutput],
+        { type: "application/json;charset=utf-8" }
+      );
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "signed-encrypted-message.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setStatus("JSON file created.", "ok");
+    });
+
+    $("clearBtn").addEventListener("click", () => {
+      $("signingPrivateKey").value = "";
+      $("encryptionPublicKey").value = "";
+      $("message").value = "";
+      $("output").value = "";
+      $("privateKeyInfo").textContent = "Private-key format: not detected";
+      $("publicKeyInfo").textContent = "Public-key format: not detected";
+      lastOutput = "";
+      $("copyBtn").disabled = true;
+      $("downloadBtn").disabled = true;
+      setStatus("");
+    });
+
+    // Show detected PEM labels as soon as the user pastes keys.
+    $("signingPrivateKey").addEventListener("input", () => {
+      try {
+        const { label } = cleanPem($("signingPrivateKey").value);
+        $("privateKeyInfo").textContent =
+          "Private-key format: " + label;
+      } catch {
+        $("privateKeyInfo").textContent =
+          "Private-key format: not detected";
+      }
+    });
+
+    $("encryptionPublicKey").addEventListener("input", () => {
+      try {
+        const { label } = cleanPem($("encryptionPublicKey").value);
+        $("publicKeyInfo").textContent =
+          "Public-key format: " + label;
+      } catch {
+        $("publicKeyInfo").textContent =
+          "Public-key format: not detected";
+      }
+    });
+  </script>
+</body>
+</html>
