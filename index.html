@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RSA sign &amp; encrypt</title>
+<style>
+  :root {
+    --bg: #F1F3F7;
+    --surface: #FFFFFF;
+    --field: #FAFBFD;
+    --ink: #16202E;
+    --muted: #586277;
+    --line: #D5DAE4;
+    --focus: #2F5BD3;
+    --sign: #5B3FA6;
+    --enc: #0B6E6E;
+    --ok: #1B7A46;
+    --ok-soft: #E3F3EA;
+    --bad: #B3261E;
+    --bad-soft: #FBE7E5;
+    --sans: "Segoe UI Variable Text", "Segoe UI", "Avenir Next", system-ui, -apple-system, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111827;
+      --surface: #182033;
+      --field: #131B2D;
+      --ink: #E7EBF3;
+      --muted: #9AA6BD;
+      --line: #2A3550;
+      --focus: #8AB4FF;
+      --sign: #B4A6FF;
+      --enc: #5ED3CB;
+      --ok: #5FD08F;
+      --ok-soft: #153726;
+      --bad: #FF8F86;
+      --bad-soft: #40201E;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { color-scheme: light dark; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.5 var(--sans);
+  }
+  .page { max-width: 1120px; margin: 0 auto; padding: 32px 20px 48px; }
+
+  h1 { font-size: 1.75rem; line-height: 1.2; margin: 0 0 6px; letter-spacing: -0.01em; font-weight: 650; }
+  .lede { margin: 0 0 22px; color: var(--muted); max-width: 68ch; }
+
+  /* generator strip */
+  .gen {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 16px; margin-bottom: 20px;
+  }
+  .gen p { margin: 0; flex: 1 1 280px; color: var(--muted); }
+  .gen p strong { color: var(--ink); font-weight: 600; }
+  .gen label { display: flex; align-items: center; gap: 8px; color: var(--muted); white-space: nowrap; }
+  .gen select { width: auto; }
+  #genStatus { color: var(--muted); min-height: 1.5em; }
+
+  /* the two parties */
+  .keys { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .party {
+    --accent: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 5px solid var(--accent);
+    border-radius: 4px 10px 10px 4px;
+    padding: 16px 18px 6px;
+  }
+  .party.sign { --accent: var(--sign); }
+  .party.enc { --accent: var(--enc); }
+  .party h2 { font-size: 1.05rem; margin: 0 0 12px; font-weight: 650; color: var(--accent); }
+  .party h2 span { color: var(--muted); font-weight: 400; margin-left: 6px; }
+
+  .field { margin-bottom: 14px; transition: opacity .15s; }
+  body[data-tab="encrypt"] .field[data-used="decrypt"],
+  body[data-tab="decrypt"] .field[data-used="encrypt"] { opacity: .8; }
+
+  label { display: block; font-weight: 600; margin-bottom: 4px; }
+  label .role { font-weight: 400; color: var(--muted); margin-left: 6px; }
+
+  textarea, select {
+    color: var(--ink);
+    background: var(--field);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+  textarea {
+    width: 100%; display: block; resize: vertical;
+    font: 12.5px/1.45 var(--mono);
+    padding: 10px 12px;
+  }
+  textarea.pem { white-space: pre; overflow: auto; }
+  textarea.text { font: 15px/1.5 var(--sans); }
+  select { font: inherit; padding: 7px 8px; width: 100%; }
+  textarea:focus-visible, select:focus-visible, .btn:focus-visible, [role="tab"]:focus-visible {
+    outline: 2px solid var(--focus); outline-offset: 2px;
+  }
+
+  .hint { margin: 4px 0 0; font-size: .875rem; color: var(--muted); min-height: 1.3em; }
+  .hint.ok { color: var(--ok); }
+  .hint.bad { color: var(--bad); }
+
+  /* work area */
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-top: 28px; }
+  [role="tab"] {
+    font: inherit; font-weight: 600; color: var(--muted);
+    background: none; border: 0; border-bottom: 3px solid transparent;
+    padding: 10px 14px; margin-bottom: -1px; cursor: pointer;
+  }
+  [role="tab"][aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+  .workwrap {
+    background: var(--surface); border: 1px solid var(--line); border-top: 0;
+    border-radius: 0 0 10px 10px; padding: 20px;
+  }
+  .uses { margin: 0 0 16px; color: var(--muted); }
+  .work { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+
+  .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 4px 0 8px; }
+  .options label { font-weight: 500; font-size: .875rem; color: var(--muted); }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .btn {
+    font: inherit; font-weight: 600; padding: 8px 14px; border-radius: 6px;
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer;
+  }
+  .btn:hover { border-color: var(--muted); }
+  .btn.primary { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+  .btn:disabled { opacity: .55; cursor: progress; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .chip { padding: 4px 12px; border-radius: 999px; font-weight: 600; font-size: .9rem; }
+  .chip.ok { background: var(--ok-soft); color: var(--ok); }
+  .chip.bad { background: var(--bad-soft); color: var(--bad); }
+
+  .alert {
+    grid-column: 1 / -1;
+    padding: 10px 14px; border-radius: 6px;
+    background: var(--bad-soft); color: var(--bad); border: 1px solid var(--bad);
+  }
+  #nocrypto { margin-bottom: 20px; }
+
+  footer { margin-top: 20px; color: var(--muted); font-size: .875rem; max-width: 80ch; }
+
+  @media (max-width: 860px) {
+    .keys, .work { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .field { transition: none; }
+  }
+</style>
+</head>
+<body data-tab="encrypt">
+<div class="page">
+
+  <header>
+    <h1>RSA sign &amp; encrypt</h1>
+    <p class="lede">Sign a message with the sender's private key, encrypt it for the recipient's public key, and get one envelope you can send. Everything runs in this page; nothing is uploaded.</p>
+  </header>
+
+  <div id="nocrypto" class="alert" role="alert" hidden>
+    This browser has no Web Crypto API here. Open the file from disk or over https in a current Chrome, Edge, Firefox, or Safari.
+  </div>
+  <noscript><div class="alert">This tool needs JavaScript.</div></noscript>
+
+  <section class="gen" aria-label="Key generator">
+    <p><strong>No keys yet?</strong> Generate a signing pair and an encryption pair. They fill the four key fields below.</p>
+    <label for="bits">Key size
+      <select id="bits">
+        <option value="2048" selected>2048-bit</option>
+        <option value="3072">3072-bit</option>
+        <option value="4096">4096-bit</option>
+      </select>
+    </label>
+    <button id="gen" class="btn" type="button">Generate key pairs</button>
+    <span id="genStatus" role="status"></span>
+  </section>
+
+  <div class="keys">
+    <section class="party sign" aria-labelledby="h-sender">
+      <h2 id="h-sender">Sender <span>signing keys</span></h2>
+      <div class="field" data-used="encrypt">
+        <label for="snd-priv">Private key<span class="role">signs the message</span></label>
+        <textarea id="snd-priv" class="pem" data-kind="private" rows="6" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="-----BEGIN PRIVATE KEY-----"></textarea>
+        <p class="hint"></p>
+      </div>
+      <div class="field" data-used="decrypt">
+        <label for="snd-pub">Public key<span class="role">verifies the signature</span></label>
+        <textarea id="snd-pub" class="pem" data-kind="public" rows="6" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="-----BEGIN PUBLIC KEY-----"></textarea>
+        <p class="hint"></p>
+      </div>
+    </section>
+
+    <section class="party enc" aria-labelledby="h-recipient">
+      <h2 id="h-recipient">Recipient <span>encryption keys</span></h2>
+      <div class="field" data-used="decrypt">
+        <label for="rcp-priv">Private key<span class="role">decrypts the message</span></label>
+        <textarea id="rcp-priv" class="pem" data-kind="private" rows="6" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="-----BEGIN PRIVATE KEY-----"></textarea>
+        <p class="hint"></p>
+      </div>
+      <div class="field" data-used="encrypt">
+        <label for="rcp-pub">Public key<span class="role">encrypts the message</span></label>
+        <textarea id="rcp-pub" class="pem" data-kind="public" rows="6" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="-----BEGIN PUBLIC KEY-----"></textarea>
+        <p class="hint"></p>
+      </div>
+    </section>
+  </div>
+
+  <div class="tabs" role="tablist" aria-label="Operation">
+    <button id="tab-encrypt" class="tab" role="tab" type="button" data-tab="encrypt" aria-selected="true" aria-controls="panel-encrypt">Sign and encrypt</button>
+    <button id="tab-decrypt" class="tab" role="tab" type="button" data-tab="decrypt" aria-selected="false" aria-controls="panel-decrypt" tabindex="-1">Decrypt and verify</button>
+  </div>
+
+  <div class="workwrap">
+
+    <!-- Sign and encrypt -->
+    <div id="panel-encrypt" role="tabpanel" aria-labelledby="tab-encrypt">
+      <p class="uses">Uses the sender's private key and the recipient's public key.</p>
+      <div class="work">
+        <div>
+          <div class="field">
+            <label for="msg">Message<span class="role" id="msgCount">0 bytes</span></label>
+            <textarea id="msg" class="text" rows="9" spellcheck="false" placeholder="Type or paste the original message"></textarea>
+          </div>
+          <div class="options">
+            <label>Encryption
+              <select id="mode">
+                <option value="hybrid" selected>Hybrid (any length)</option>
+                <option value="direct">Direct RSA-OAEP</option>
+              </select>
+            </label>
+            <label>OAEP hash
+              <select id="oaep">
+                <option>SHA-256</option><option>SHA-384</option><option>SHA-512</option>
+              </select>
+            </label>
+            <label>Signature
+              <select id="scheme">
+                <option value="RSA-PSS" selected>RSA-PSS</option>
+                <option value="RSASSA-PKCS1-v1_5">RSASSA-PKCS1-v1_5</option>
+              </select>
+            </label>
+            <label>Signature hash
+              <select id="sighash">
+                <option>SHA-256</option><option>SHA-384</option><option>SHA-512</option>
+              </select>
+            </label>
+            <label>Output format
+              <select id="fmt">
+                <option value="json" selected>JSON</option>
+                <option value="base64">Base64, one line</option>
+              </select>
+            </label>
+          </div>
+          <p class="hint" id="modeHint"></p>
+          <div class="actions">
+            <button id="run-enc" class="btn primary" type="button">Sign and encrypt</button>
+          </div>
+        </div>
+
+        <div>
+          <div class="field">
+            <label for="out">Signed and encrypted message</label>
+            <textarea id="out" class="pem" rows="13" readonly spellcheck="false" placeholder="The envelope appears here"></textarea>
+          </div>
+          <div class="actions">
+            <button id="copy" class="btn" type="button">Copy</button>
+            <button id="toDec" class="btn" type="button">Test in decrypt tab</button>
+          </div>
+        </div>
+        <div id="enc-error" class="alert" role="alert" hidden></div>
+      </div>
+    </div>
+
+    <!-- Decrypt and verify -->
+    <div id="panel-decrypt" role="tabpanel" aria-labelledby="tab-decrypt" hidden>
+      <p class="uses">Uses the recipient's private key and the sender's public key.</p>
+      <div class="work">
+        <div>
+          <div class="field">
+            <label for="env">Signed and encrypted message</label>
+            <textarea id="env" class="pem" rows="13" spellcheck="false" placeholder="Paste the envelope (JSON or Base64)"></textarea>
+          </div>
+          <div class="actions">
+            <button id="run-dec" class="btn primary" type="button">Decrypt and verify</button>
+          </div>
+        </div>
+        <div>
+          <div id="results" class="chips" hidden>
+            <span id="chipDec" class="chip"></span>
+            <span id="chipSig" class="chip"></span>
+          </div>
+          <div class="field">
+            <label for="plain" id="plainLabel">Original message</label>
+            <textarea id="plain" class="text" rows="9" readonly spellcheck="false" placeholder="The decrypted message appears here"></textarea>
+          </div>
+        </div>
+        <div id="dec-error" class="alert" role="alert" hidden></div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    Keys can be PEM (PKCS#8 or SPKI, plus older PKCS#1 "RSA PRIVATE KEY" / "RSA PUBLIC KEY") or JWK. Passphrase-protected keys are not supported. Use separate key pairs for signing and encryption.
+  </footer>
+</div>
+
+<script>
+// ==== core:start
+const RSA = (() => {
+  'use strict';
+
+  const enc = new TextEncoder();
+  const dec = new TextDecoder();
+
+  const FORMAT = 'rsa-signcrypt-v1';
+  const HASH_BYTES = { 'SHA-256': 32, 'SHA-384': 48, 'SHA-512': 64 };
+  const SIG_SCHEMES = ['RSA-PSS', 'RSASSA-PKCS1-v1_5'];
+
+  // ---------- helpers ----------
+  const b64 = {
+    encode(buf) {
+      const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+      let s = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      }
+      return btoa(s);
+    },
+    decode(str) {
+      let bin;
+      try { bin = atob(String(str).replace(/\s+/g, '')); }
+      catch { throw new Error('Invalid Base64 data.'); }
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    },
+  };
+
+  const concat = (...parts) => {
+    const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+    let o = 0;
+    for (const p of parts) { out.set(p, o); o += p.length; }
+    return out;
+  };
+
+  const toPem = (buf, label) =>
+    `-----BEGIN ${label}-----\n${b64.encode(buf).match(/.{1,64}/g).join('\n')}\n-----END ${label}-----`;
+
+  async function labelled(label, fn) {
+    try { return await fn(); }
+    catch (e) { throw new Error(`${label}: ${e.message}`); }
+  }
+
+  // ---------- PKCS#1 -> PKCS#8 / SPKI wrapping (Web Crypto only imports the latter) ----------
+  const derLen = (n) => {
+    if (n < 128) return [n];
+    const bytes = [];
+    while (n > 0) { bytes.unshift(n & 255); n >>= 8; }
+    return [0x80 | bytes.length, ...bytes];
+  };
+  const derTLV = (tag, content) => concat(Uint8Array.of(tag, ...derLen(content.length)), content);
+  // SEQUENCE { OID rsaEncryption, NULL }
+  const RSA_ALG_ID = Uint8Array.of(0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00);
+  const pkcs1PrivateToPkcs8 = (der) => derTLV(0x30, concat(Uint8Array.of(0x02, 0x01, 0x00), RSA_ALG_ID, derTLV(0x04, der)));
+  const pkcs1PublicToSpki = (der) => derTLV(0x30, concat(RSA_ALG_ID, derTLV(0x03, concat(Uint8Array.of(0), der))));
+
+  // ---------- key import ----------
+  async function importRsaKey(text, kind, algorithm, usage) {
+    const src = String(text || '').trim();
+    if (!src) throw new Error(`${kind === 'private' ? 'Private' : 'Public'} key is empty.`);
+
+    // JWK
+    if (src[0] === '{') {
+      let jwk;
+      try { jwk = JSON.parse(src); } catch { throw new Error('Looks like a JWK but is not valid JSON.'); }
+      if (jwk.kty !== 'RSA') throw new Error('JWK is not an RSA key (kty must be "RSA").');
+      if (kind === 'private' && !jwk.d) throw new Error('This JWK has no private part; a private key is required here.');
+      const fields = kind === 'private' ? ['n', 'e', 'd', 'p', 'q', 'dp', 'dq', 'qi'] : ['n', 'e'];
+      const clean = { kty: 'RSA' };
+      for (const f of fields) if (jwk[f] !== undefined) clean[f] = jwk[f];
+      try { return await crypto.subtle.importKey('jwk', clean, algorithm, false, [usage]); }
+      catch { throw new Error('Could not import this JWK as an RSA key.'); }
+    }
+
+    // PEM / bare Base64 DER
+    const m = src.match(/-----BEGIN ([A-Z0-9 ]+)-----([\s\S]*?)-----END \1-----/);
+    const label = m ? m[1] : '';
+    if (label === 'ENCRYPTED PRIVATE KEY' || /Proc-Type:.*ENCRYPTED/.test(src)) {
+      throw new Error('Passphrase-protected keys are not supported. Remove the passphrase first: openssl pkey -in key.pem -out plain.pem');
+    }
+    if (label === 'CERTIFICATE') {
+      throw new Error('Certificates are not supported. Extract the public key first: openssl x509 -in cert.pem -pubkey -noout');
+    }
+    if (kind === 'private' && label.includes('PUBLIC')) throw new Error('This is a public key, but a private key is required here.');
+    if (kind === 'public' && label.includes('PRIVATE')) throw new Error('This is a private key, but a public key is required here.');
+
+    let der;
+    try { der = b64.decode(m ? m[2] : src); } catch { throw new Error('Not valid PEM or Base64.'); }
+
+    const wrapPkcs1 = kind === 'private' ? pkcs1PrivateToPkcs8 : pkcs1PublicToSpki;
+    const format = kind === 'private' ? 'pkcs8' : 'spki';
+    const candidates = label.startsWith('RSA ') ? [wrapPkcs1(der)]
+      : label ? [der]
+      : [der, wrapPkcs1(der)];
+
+    for (const data of candidates) {
+      try { return await crypto.subtle.importKey(format, data, algorithm, false, [usage]); }
+      catch { /* try next candidate */ }
+    }
+    throw new Error(`Not a valid RSA ${kind} key (${kind === 'private' ? 'PKCS#8 or PKCS#1' : 'SPKI or PKCS#1'}).`);
+  }
+
+  async function describeKey(text, kind) {
+    const key = await importRsaKey(text, kind, { name: 'RSA-OAEP', hash: 'SHA-256' }, kind === 'private' ? 'decrypt' : 'encrypt');
+    return { bits: key.algorithm.modulusLength };
+  }
+
+  // ---------- sign / verify ----------
+  function sigParams(s) {
+    if (s.scheme === 'RSA-PSS') {
+      const salt = s.saltLength ?? HASH_BYTES[s.hash];
+      if (!Number.isInteger(salt) || salt < 0 || salt > 512) throw new Error('Envelope has an invalid PSS salt length.');
+      return { name: 'RSA-PSS', saltLength: salt };
+    }
+    return { name: 'RSASSA-PKCS1-v1_5' };
+  }
+  const signRaw = async (key, s, data) => new Uint8Array(await crypto.subtle.sign(sigParams(s), key, data));
+  async function verifyRaw(key, s, sig, data) {
+    try { return await crypto.subtle.verify(sigParams(s), key, sig, data); }
+    catch { return false; }
+  }
+
+  const checkHash = (h) => { if (!(h in HASH_BYTES)) throw new Error(`Unsupported hash: ${h}`); };
+  const checkScheme = (s) => { if (!SIG_SCHEMES.includes(s)) throw new Error(`Unsupported signature scheme: ${s}`); };
+
+  // ---------- sign + encrypt ----------
+  async function signAndEncrypt({
+    message, senderPrivateKey, recipientPublicKey,
+    mode = 'hybrid', oaepHash = 'SHA-256', sigScheme = 'RSA-PSS', sigHash = 'SHA-256',
+  }) {
+    checkHash(oaepHash); checkHash(sigHash); checkScheme(sigScheme);
+    if (!message) throw new Error('Enter a message to sign and encrypt.');
+    const msgBytes = enc.encode(message);
+
+    const signKey = await labelled('Sender private key', () =>
+      importRsaKey(senderPrivateKey, 'private', { name: sigScheme, hash: sigHash }, 'sign'));
+    const encKey = await labelled('Recipient public key', () =>
+      importRsaKey(recipientPublicKey, 'public', { name: 'RSA-OAEP', hash: oaepHash }, 'encrypt'));
+
+    const bits = encKey.algorithm.modulusLength;
+    const maxOaep = bits / 8 - 2 * HASH_BYTES[oaepHash] - 2;
+    const sigInfo = { scheme: sigScheme, hash: sigHash };
+    if (sigScheme === 'RSA-PSS') sigInfo.saltLength = HASH_BYTES[sigHash];
+
+    const sign = (data) => labelled('Signing failed (the sender key may be too small for this scheme and hash)', () => signRaw(signKey, sigInfo, data));
+    const rsaEncrypt = (data) => labelled('RSA encryption failed', () => crypto.subtle.encrypt({ name: 'RSA-OAEP' }, encKey, data));
+
+    if (mode === 'hybrid') {
+      if (maxOaep < 32) {
+        throw new Error(`The ${bits}-bit recipient key is too small for RSA-OAEP with ${oaepHash}. Use a larger key or a smaller hash.`);
+      }
+      // sign-then-encrypt: the signature travels inside the encrypted payload
+      const signature = await sign(msgBytes);
+      const inner = enc.encode(JSON.stringify({ message, signature: b64.encode(signature) }));
+      const aesRaw = crypto.getRandomValues(new Uint8Array(32));
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const aesKey = await crypto.subtle.importKey('raw', aesRaw, 'AES-GCM', false, ['encrypt']);
+      const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aesKey, inner);
+      const encryptedKey = await rsaEncrypt(aesRaw);
+      aesRaw.fill(0);
+      return {
+        format: FORMAT,
+        mode: 'hybrid',
+        encryption: {
+          algorithm: 'RSA-OAEP', oaepHash, cipher: 'AES-256-GCM',
+          encryptedKey: b64.encode(encryptedKey), iv: b64.encode(iv), ciphertext: b64.encode(ciphertext),
+        },
+        signature: { ...sigInfo, location: 'inside-ciphertext', signedData: 'message' },
+      };
+    }
+
+    if (mode === 'direct') {
+      if (maxOaep < 1 || msgBytes.length > maxOaep) {
+        throw new Error(
+          `Message is ${msgBytes.length} bytes, but direct RSA-OAEP with a ${bits}-bit key and ${oaepHash} holds at most ${Math.max(maxOaep, 0)} bytes. Switch to hybrid mode or shorten the message.`);
+      }
+      // encrypt-then-sign: RSA-OAEP leaves no room for a signature inside, so it signs the ciphertext
+      const ciphertext = new Uint8Array(await rsaEncrypt(msgBytes));
+      const signature = await sign(ciphertext);
+      return {
+        format: FORMAT,
+        mode: 'direct',
+        encryption: { algorithm: 'RSA-OAEP', oaepHash, ciphertext: b64.encode(ciphertext) },
+        signature: { ...sigInfo, location: 'outside-ciphertext', signedData: 'ciphertext', value: b64.encode(signature) },
+      };
+    }
+
+    throw new Error(`Unsupported mode: ${mode}`);
+  }
+
+  // ---------- envelope encode / parse ----------
+  function encodeEnvelope(env, format) {
+    const json = JSON.stringify(env, null, format === 'json' ? 2 : 0);
+    return format === 'base64' ? b64.encode(enc.encode(json)) : json;
+  }
+
+  function parseEnvelope(text) {
+    const t = String(text || '').trim();
+    if (!t) throw new Error('Paste the signed and encrypted message first.');
+    let obj;
+    if (t[0] === '{') {
+      try { obj = JSON.parse(t); } catch { throw new Error('The message looks like JSON but cannot be parsed.'); }
+    } else {
+      try { obj = JSON.parse(dec.decode(b64.decode(t))); }
+      catch { throw new Error('The message is neither envelope JSON nor a Base64-encoded envelope.'); }
+    }
+    const isStr = (v) => typeof v === 'string' && v.length > 0;
+    const e = obj && obj.encryption, s = obj && obj.signature;
+    if (!obj || obj.format !== FORMAT || !e || !s) throw new Error(`Not a ${FORMAT} envelope.`);
+    if (e.algorithm !== 'RSA-OAEP' || !(e.oaepHash in HASH_BYTES)) throw new Error('Envelope uses an unsupported encryption setting.');
+    if (!SIG_SCHEMES.includes(s.scheme) || !(s.hash in HASH_BYTES)) throw new Error('Envelope uses an unsupported signature setting.');
+    if (!isStr(e.ciphertext)) throw new Error('Envelope is missing its ciphertext.');
+    if (obj.mode === 'hybrid') {
+      if (e.cipher !== 'AES-256-GCM' || !isStr(e.encryptedKey) || !isStr(e.iv)) throw new Error('Hybrid envelope is missing fields.');
+    } else if (obj.mode === 'direct') {
+      if (!isStr(s.value)) throw new Error('Direct envelope is missing its signature.');
+    } else {
+      throw new Error('Envelope has an unknown mode.');
+    }
+    return obj;
+  }
+
+  // ---------- decrypt + verify ----------
+  async function decryptAndVerify({ envelope, recipientPrivateKey, senderPublicKey }) {
+    const env = typeof envelope === 'string' ? parseEnvelope(envelope) : envelope;
+    const { encryption: e, signature: s } = env;
+
+    const decKey = await labelled('Recipient private key', () =>
+      importRsaKey(recipientPrivateKey, 'private', { name: 'RSA-OAEP', hash: e.oaepHash }, 'decrypt'));
+    const verKey = await labelled('Sender public key', () =>
+      importRsaKey(senderPublicKey, 'public', { name: s.scheme, hash: s.hash }, 'verify'));
+
+    const rsaDecrypt = async (data) => {
+      try { return new Uint8Array(await crypto.subtle.decrypt({ name: 'RSA-OAEP' }, decKey, data)); }
+      catch { throw new Error('Decryption failed. This is the wrong recipient private key, or the message was altered.'); }
+    };
+
+    if (env.mode === 'hybrid') {
+      const aesRaw = await rsaDecrypt(b64.decode(e.encryptedKey));
+      let innerBytes;
+      try {
+        const aesKey = await crypto.subtle.importKey('raw', aesRaw, 'AES-GCM', false, ['decrypt']);
+        innerBytes = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64.decode(e.iv) }, aesKey, b64.decode(e.ciphertext));
+      } catch {
+        throw new Error('Authentication failed. The ciphertext was altered or corrupted.');
+      }
+      let inner;
+      try { inner = JSON.parse(dec.decode(innerBytes)); } catch { inner = null; }
+      if (!inner || typeof inner.message !== 'string' || typeof inner.signature !== 'string') {
+        throw new Error('The decrypted payload is malformed.');
+      }
+      const verified = await verifyRaw(verKey, s, b64.decode(inner.signature), enc.encode(inner.message));
+      return { message: inner.message, verified };
+    }
+
+    // direct: the signature covers the ciphertext
+    const ciphertext = b64.decode(e.ciphertext);
+    const verified = await verifyRaw(verKey, s, b64.decode(s.value), ciphertext);
+    const message = dec.decode(await rsaDecrypt(ciphertext));
+    return { message, verified };
+  }
+
+  // ---------- key generation ----------
+  async function generateKeyPair(purpose, bits) {
+    const base = { modulusLength: bits, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' };
+    const pair = purpose === 'sign'
+      ? await crypto.subtle.generateKey({ name: 'RSA-PSS', ...base }, true, ['sign', 'verify'])
+      : await crypto.subtle.generateKey({ name: 'RSA-OAEP', ...base }, true, ['encrypt', 'decrypt']);
+    const [priv, pub] = await Promise.all([
+      crypto.subtle.exportKey('pkcs8', pair.privateKey),
+      crypto.subtle.exportKey('spki', pair.publicKey),
+    ]);
+    return { privatePem: toPem(priv, 'PRIVATE KEY'), publicPem: toPem(pub, 'PUBLIC KEY') };
+  }
+
+  return { signAndEncrypt, decryptAndVerify, parseEnvelope, encodeEnvelope, describeKey, generateKeyPair };
+})();
+// ==== core:end
+
+// ==== ui:start
+(() => {
+  'use strict';
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => Array.from(document.querySelectorAll(s));
+  const utf8Length = (s) => new TextEncoder().encode(s).length;
+
+  if (!(window.crypto && crypto.subtle)) {
+    $('#nocrypto').hidden = false;
+    $$('button, select, textarea').forEach((el) => { el.disabled = true; });
+    return;
+  }
+
+  // ----- key fields: live validation -----
+  function setHint(el, text, state) {
+    el.textContent = text;
+    el.className = 'hint' + (state ? ' ' + state : '');
+  }
+  $$('textarea[data-kind]').forEach((ta) => {
+    const hint = ta.parentElement.querySelector('.hint');
+    const kind = ta.dataset.kind;
+    const idle = kind === 'private' ? 'Paste PEM (PKCS#8 or PKCS#1) or JWK.' : 'Paste PEM (SPKI or PKCS#1) or JWK.';
+    let timer;
+    setHint(hint, idle, '');
+    ta.addEventListener('input', () => {
+      clearTimeout(timer);
+      const v = ta.value;
+      if (!v.trim()) { setHint(hint, idle, ''); return; }
+      timer = setTimeout(async () => {
+        try {
+          const { bits } = await RSA.describeKey(v, kind);
+          if (ta.value === v) setHint(hint, `\u2713 RSA ${bits}-bit ${kind} key`, 'ok');
+        } catch (e) {
+          if (ta.value === v) setHint(hint, `\u2717 ${e.message}`, 'bad');
+        }
+      }, 250);
+    });
+  });
+
+  // ----- key generator -----
+  const genBtn = $('#gen');
+  genBtn.addEventListener('click', async () => {
+    const bits = Number($('#bits').value);
+    genBtn.disabled = true;
+    $('#genStatus').textContent = `Generating two ${bits}-bit key pairs\u2026`;
+    await new Promise((r) => setTimeout(r, 30));
+    try {
+      const [sender, recipient] = await Promise.all([RSA.generateKeyPair('sign', bits), RSA.generateKeyPair('enc', bits)]);
+      const fill = (id, value) => { const el = $(id); el.value = value; el.dispatchEvent(new Event('input')); };
+      fill('#snd-priv', sender.privatePem);
+      fill('#snd-pub', sender.publicPem);
+      fill('#rcp-priv', recipient.privatePem);
+      fill('#rcp-pub', recipient.publicPem);
+      $('#genStatus').textContent = 'Key fields filled.';
+    } catch (e) {
+      $('#genStatus').textContent = `Key generation failed: ${e.message}`;
+    } finally {
+      genBtn.disabled = false;
+    }
+  });
+
+  // ----- tabs -----
+  function setTab(name) {
+    document.body.dataset.tab = name;
+    $$('[role="tab"]').forEach((t) => {
+      const on = t.dataset.tab === name;
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on ? 0 : -1;
+    });
+    $('#panel-encrypt').hidden = name !== 'encrypt';
+    $('#panel-decrypt').hidden = name !== 'decrypt';
+  }
+  $$('[role="tab"]').forEach((t) => {
+    t.addEventListener('click', () => setTab(t.dataset.tab));
+    t.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+      const other = t.dataset.tab === 'encrypt' ? 'decrypt' : 'encrypt';
+      setTab(other);
+      $('#tab-' + other).focus();
+    });
+  });
+
+  // ----- sign and encrypt -----
+  const modeHints = {
+    hybrid: 'Hybrid: AES-256-GCM encrypts the message together with its signature, and RSA-OAEP encrypts the AES key. Works for any message length.',
+    direct: 'Direct: RSA-OAEP encrypts the message itself, so it must fit in key size \u2212 2 \u00d7 hash size \u2212 2 bytes (190 bytes for RSA-2048 with SHA-256). The signature covers the ciphertext and travels next to it.',
+  };
+  const updateModeHint = () => { $('#modeHint').textContent = modeHints[$('#mode').value]; };
+  $('#mode').addEventListener('change', updateModeHint);
+  updateModeHint();
+
+  const updateCount = () => {
+    const n = utf8Length($('#msg').value);
+    $('#msgCount').textContent = `${n} byte${n === 1 ? '' : 's'}`;
+  };
+  $('#msg').addEventListener('input', updateCount);
+  updateCount();
+
+  async function run(btn, errEl, fn) {
+    errEl.hidden = true;
+    btn.disabled = true;
+    try { await fn(); }
+    catch (e) { errEl.textContent = e.message || String(e); errEl.hidden = false; }
+    finally { btn.disabled = false; }
+  }
+
+  $('#run-enc').addEventListener('click', () => run($('#run-enc'), $('#enc-error'), async () => {
+    $('#out').value = '';
+    const envelope = await RSA.signAndEncrypt({
+      message: $('#msg').value,
+      senderPrivateKey: $('#snd-priv').value,
+      recipientPublicKey: $('#rcp-pub').value,
+      mode: $('#mode').value,
+      oaepHash: $('#oaep').value,
+      sigScheme: $('#scheme').value,
+      sigHash: $('#sighash').value,
+    });
+    $('#out').value = RSA.encodeEnvelope(envelope, $('#fmt').value);
+  }));
+
+  $('#copy').addEventListener('click', async () => {
+    const btn = $('#copy');
+    const text = $('#out').value;
+    if (!text) return;
+    try { await navigator.clipboard.writeText(text); }
+    catch { $('#out').select(); document.execCommand('copy'); }
+    const label = btn.textContent;
+    btn.textContent = 'Copied';
+    setTimeout(() => { btn.textContent = label; }, 1200);
+  });
+
+  $('#toDec').addEventListener('click', () => {
+    if (!$('#out').value) return;
+    $('#env').value = $('#out').value;
+    setTab('decrypt');
+    $('#run-dec').focus();
+  });
+
+  // ----- decrypt and verify -----
+  $('#run-dec').addEventListener('click', () => run($('#run-dec'), $('#dec-error'), async () => {
+    $('#results').hidden = true;
+    $('#plain').value = '';
+    $('#plainLabel').textContent = 'Original message';
+    const { message, verified } = await RSA.decryptAndVerify({
+      envelope: $('#env').value,
+      recipientPrivateKey: $('#rcp-priv').value,
+      senderPublicKey: $('#snd-pub').value,
+    });
+    const chipDec = $('#chipDec'), chipSig = $('#chipSig');
+    chipDec.textContent = '\u2713 Decrypted';
+    chipDec.className = 'chip ok';
+    chipSig.textContent = verified ? '\u2713 Signature valid' : '\u2717 Signature invalid. Do not trust this message.';
+    chipSig.className = 'chip ' + (verified ? 'ok' : 'bad');
+    $('#results').hidden = false;
+    $('#plainLabel').textContent = verified ? 'Original message' : 'Original message (unverified)';
+    $('#plain').value = message;
+  }));
+})();
+// ==== ui:end
+</script>
+</body>
+</html>
