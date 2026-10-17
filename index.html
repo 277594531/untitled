@@ -88,7 +88,7 @@
   label { display: block; font-weight: 600; margin-bottom: 4px; }
   label .role { font-weight: 400; color: var(--muted); margin-left: 6px; }
 
-  textarea, select {
+  textarea, select, input[type="text"], input[type="number"] {
     color: var(--ink);
     background: var(--field);
     border: 1px solid var(--line);
@@ -101,14 +101,29 @@
   }
   textarea.pem { white-space: pre; overflow: auto; }
   textarea.text { font: 15px/1.5 var(--sans); }
+  textarea.code { font: 12.5px/1.45 var(--mono); }
   select { font: inherit; padding: 7px 8px; width: 100%; }
-  textarea:focus-visible, select:focus-visible, .btn:focus-visible, [role="tab"]:focus-visible {
+  input[type="text"], input[type="number"] { font: inherit; padding: 7px 8px; width: 100%; }
+  textarea:focus-visible, select:focus-visible, input:focus-visible, .btn:focus-visible, [role="tab"]:focus-visible {
     outline: 2px solid var(--focus); outline-offset: 2px;
   }
 
   .hint { margin: 4px 0 0; font-size: .875rem; color: var(--muted); min-height: 1.3em; }
   .hint.ok { color: var(--ok); }
   .hint.bad { color: var(--bad); }
+
+  /* command generator */
+  .cmdgen {
+    background: var(--field); border: 1px solid var(--line); border-radius: 8px;
+    padding: 14px 16px; margin-bottom: 16px;
+  }
+  .cmdgen > label:first-child { margin-bottom: 10px; }
+  .cmdgen .options { margin: 0 0 10px; }
+  .cmdgen .checkline {
+    display: flex; align-items: center; gap: 8px; font-weight: 500; margin-bottom: 10px; cursor: pointer;
+  }
+  .cmdgen .checkline input { width: auto; }
+  .cmdgen .typefields { margin-bottom: 4px; }
 
   /* work area */
   .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-top: 28px; }
@@ -227,6 +242,57 @@
       <p class="uses">Uses the sender's private key and the recipient's public key.</p>
       <div class="work">
         <div>
+          <div class="cmdgen" aria-label="Supervisor command generator">
+            <label for="cmdType">Supervisor command generator</label>
+            <div class="options">
+              <label>Command type
+                <select id="cmdType">
+                  <option value="relogin" selected>M365 relogin</option>
+                  <option value="powershell">PowerShell execute</option>
+                </select>
+              </label>
+              <label>Sequence
+                <input type="number" id="cmdSeq" min="0" step="1" value="1">
+              </label>
+              <label>Expires in (minutes)
+                <input type="number" id="cmdExpiry" min="1" step="1" value="10">
+              </label>
+            </div>
+
+            <div class="typefields" data-cmdtype="relogin">
+              <label>Mode
+                <select id="cmdMode">
+                  <option value="interactive" selected>interactive</option>
+                  <option value="silent">silent</option>
+                </select>
+              </label>
+              <label for="cmdReason">Reason</label>
+              <input type="text" id="cmdReason" value="M365 session authentication expired">
+              <label class="checkline" for="cmdDryRunRelogin">
+                <input type="checkbox" id="cmdDryRunRelogin">
+                Dry run
+              </label>
+            </div>
+
+            <div class="typefields" data-cmdtype="powershell" hidden>
+              <label for="cmdPsCommand">PowerShell command</label>
+              <textarea id="cmdPsCommand" class="code" rows="4" spellcheck="false" placeholder="Get-Date -Format o ;">Get-Date -Format o ; </textarea>
+              <label class="checkline" for="cmdKeepOpen">
+                <input type="checkbox" id="cmdKeepOpen" checked>
+                Keep session open
+              </label>
+              <label class="checkline" for="cmdDryRunPs">
+                <input type="checkbox" id="cmdDryRunPs">
+                Dry run
+              </label>
+            </div>
+
+            <div class="actions">
+              <button id="fillCmd" class="btn" type="button">Fill command</button>
+            </div>
+            <p class="hint" id="cmdHint">Sequence is remembered in this browser and auto-bumps each time you fill a command. Check it against your supervisor's actual counter before relying on it.</p>
+          </div>
+
           <div class="field">
             <label for="msg">Message<span class="role" id="msgCount">0 bytes</span></label>
             <textarea id="msg" class="text" rows="9" spellcheck="false" placeholder="Type or paste the original message"></textarea>
@@ -598,6 +664,100 @@ const RSA = (() => {
 })();
 // ==== core:end
 
+// ==== cmd:start
+// Generates plaintext command JSON for the supervisor protocol. Independent of
+// the RSA module above; only ever writes into the #msg textarea for review
+// before the existing Sign and encrypt flow runs.
+//
+// Shared envelope shape across command types: protocol, commandId, target,
+// sequence, nonce, issuedAt, notBefore, expiresAt, command, parameters,
+// correlationId. Each command type supplies its own `command` string, the
+// label used in nonce/correlationId, and a parameters builder; the envelope
+// fields (timestamps, commandId, nonce, correlationId) are built once and
+// shared by all types.
+const CommandGen = (() => {
+  'use strict';
+
+  // Time-ordered UUID (v7): unix-ms timestamp in the high 48 bits, random
+  // remainder, correct version/variant nibbles.
+  function uuidv7() {
+    const unixTsMs = BigInt(Date.now());
+    const bytes = new Uint8Array(16);
+    bytes[0] = Number((unixTsMs >> 40n) & 0xffn);
+    bytes[1] = Number((unixTsMs >> 32n) & 0xffn);
+    bytes[2] = Number((unixTsMs >> 24n) & 0xffn);
+    bytes[3] = Number((unixTsMs >> 16n) & 0xffn);
+    bytes[4] = Number((unixTsMs >> 8n) & 0xffn);
+    bytes[5] = Number(unixTsMs & 0xffn);
+    const rand = crypto.getRandomValues(new Uint8Array(10));
+    bytes.set(rand, 6);
+    bytes[6] = (bytes[6] & 0x0f) | 0x70; // version 7
+    bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 10
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+
+  // UTC, milliseconds, "Z" — e.g. 2026-10-15T06:52:58.591Z. Native
+  // toISOString() output; the canonical timestamp format for this protocol.
+  const isoUtcMs = (date) => date.toISOString();
+
+  // Compact UTC stamp derived from the same timestamp: YYYYMMDDHHMMSS, no
+  // separators. Used inside nonce/correlationId so they stay consistent with
+  // issuedAt rather than computed independently.
+  const compactStamp = (date) => isoUtcMs(date).replace(/[-:T]/g, '').slice(0, 14);
+
+  // Shared envelope fields, independent of command type.
+  function buildEnvelope({ label, command, sequence, expiresMinutes, parameters }) {
+    const now = new Date();
+    const issuedAt = isoUtcMs(now);
+    const notBefore = issuedAt;
+    const expiresAt = isoUtcMs(new Date(now.getTime() + expiresMinutes * 60000));
+    const stamp = compactStamp(now);
+    return {
+      protocol: 'm365-supervisor-command/1',
+      commandId: uuidv7(),
+      target: 'local-supervisor',
+      sequence,
+      nonce: `${label}-${stamp}-${crypto.randomUUID()}`,
+      issuedAt,
+      notBefore,
+      expiresAt,
+      command,
+      parameters,
+      correlationId: `${label}-${stamp}-${sequence}`,
+    };
+  }
+
+  // ---- command type registry ----
+  const TYPES = {
+    relogin: {
+      label: 'relogin',
+      command: 'm365.relogin',
+      buildParameters: ({ mode, reason, dryRun }) => ({ mode, reason, dryRun }),
+    },
+    powershell: {
+      label: 'powershell',
+      command: 'powershell.execute',
+      buildParameters: ({ command, keepOpen, dryRun }) => ({ command, keepOpen, dryRun }),
+    },
+  };
+
+  function build(typeKey, { sequence, expiresMinutes, fields }) {
+    const type = TYPES[typeKey];
+    if (!type) throw new Error(`Unknown command type: ${typeKey}`);
+    return buildEnvelope({
+      label: type.label,
+      command: type.command,
+      sequence,
+      expiresMinutes,
+      parameters: type.buildParameters(fields),
+    });
+  }
+
+  return { build };
+})();
+// ==== cmd:end
+
 // ==== ui:start
 (() => {
   'use strict';
@@ -629,12 +789,47 @@ const RSA = (() => {
       timer = setTimeout(async () => {
         try {
           const { bits } = await RSA.describeKey(v, kind);
-          if (ta.value === v) setHint(hint, `\u2713 RSA ${bits}-bit ${kind} key`, 'ok');
+          if (ta.value === v) setHint(hint, `✓ RSA ${bits}-bit ${kind} key`, 'ok');
         } catch (e) {
-          if (ta.value === v) setHint(hint, `\u2717 ${e.message}`, 'bad');
+          if (ta.value === v) setHint(hint, `✗ ${e.message}`, 'bad');
         }
       }, 250);
     });
+  });
+
+  // ----- default public keys -----
+  // These are the contents of out_sign_pub.pem.txt and in_encrypt_pub.pem.txt.
+  // Fill only empty fields so this default never overwrites a value already supplied.
+  const DEFAULT_SENDER_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyadji0kcJNgruIXkE3o8
+2kzLnBDgSNy+WN9QJ6TskHvQb5getZCf8XxqH4/dU8CAy3YAFp81ch7/GsK4+52U
+csb10XQLBzSC11/mNAuFDtx9ssg+2g+pGFR1KhHZgUp/2WGW2oQ2hIsJ1rmevEaj
+ZM/dibOlYxUEAGy2Wvb2+VsTjQ1ctGm7b4lt1kwBKFQTTDYPRbxoX7IJjXIvC3//
+ryVDoddKAhWbCUIEp0zJkd2VNU3Fc1lGCdAk/OqFR+t16OjN8SEcOEcpsejIqN8V
+trw0t4TOK36iCq4xpXTsy0zh2IMAEJys2Haur6LXsOUJRRZdZIqEARF5v6Z+WWvK
+bQIDAQAB
+-----END PUBLIC KEY-----`;
+  const DEFAULT_RECIPIENT_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt/YW+KI81HDnuY/WFBpg
+RE1qkzim+x3TP7XdLecT6WujF1Y05TMK47k6VTqiCDMwG0sVPezZho7MiebkM+S+
+UHWF3IWxsrWtn/ngipcgM4P7vAjEPpWvNL1/QdyDezA70V7CTv8PiffRJYPzI261
+b0g7E5CRtetRjS/AvYcbd3+ijaxrNU1fLE/60a0ymqHgk/4K51fLHZONZdc0y86c
+IpPnvfWEMO7r14szgIKhVbfIAG0/pP6s8PR1Wd11MUXe46yb6a8mbCa8Xuj1YDtR
+pPcYG6B/EL7BW8f+FkgCo1CDSRWUL6wwzbq940TpTMPWCBG1hM2zgwOXUgoGRUQF
+EwIDAQAB
+-----END PUBLIC KEY-----`;
+
+  const defaultPublicKeys = [
+    ['#snd-pub', DEFAULT_SENDER_PUBLIC_KEY],
+    ['#rcp-pub', DEFAULT_RECIPIENT_PUBLIC_KEY],
+  ];
+  defaultPublicKeys.forEach(([selector, key]) => {
+    const field = $(selector);
+    if (field && !field.value.trim()) {
+      field.value = key;
+      // Reuse the existing validation handler to validate and update the hint.
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    }
   });
 
   // ----- key generator -----
@@ -642,7 +837,7 @@ const RSA = (() => {
   genBtn.addEventListener('click', async () => {
     const bits = Number($('#bits').value);
     genBtn.disabled = true;
-    $('#genStatus').textContent = `Generating two ${bits}-bit key pairs\u2026`;
+    $('#genStatus').textContent = `Generating two ${bits}-bit key pairs…`;
     await new Promise((r) => setTimeout(r, 30));
     try {
       const [sender, recipient] = await Promise.all([RSA.generateKeyPair('sign', bits), RSA.generateKeyPair('enc', bits)]);
@@ -683,7 +878,7 @@ const RSA = (() => {
   // ----- sign and encrypt -----
   const modeHints = {
     hybrid: 'Hybrid: AES-256-GCM encrypts the message together with its signature, and RSA-OAEP encrypts the AES key. Works for any message length.',
-    direct: 'Direct: RSA-OAEP encrypts the message itself, so it must fit in key size \u2212 2 \u00d7 hash size \u2212 2 bytes (190 bytes for RSA-2048 with SHA-256). The signature covers the ciphertext and travels next to it.',
+    direct: 'Direct: RSA-OAEP encrypts the message itself, so it must fit in key size − 2 × hash size − 2 bytes (190 bytes for RSA-2048 with SHA-256). The signature covers the ciphertext and travels next to it.',
   };
   const updateModeHint = () => { $('#modeHint').textContent = modeHints[$('#mode').value]; };
   $('#mode').addEventListener('change', updateModeHint);
@@ -747,14 +942,72 @@ const RSA = (() => {
       senderPublicKey: $('#snd-pub').value,
     });
     const chipDec = $('#chipDec'), chipSig = $('#chipSig');
-    chipDec.textContent = '\u2713 Decrypted';
+    chipDec.textContent = '✓ Decrypted';
     chipDec.className = 'chip ok';
-    chipSig.textContent = verified ? '\u2713 Signature valid' : '\u2717 Signature invalid. Do not trust this message.';
+    chipSig.textContent = verified ? '✓ Signature valid' : '✗ Signature invalid. Do not trust this message.';
     chipSig.className = 'chip ' + (verified ? 'ok' : 'bad');
     $('#results').hidden = false;
     $('#plainLabel').textContent = verified ? 'Original message' : 'Original message (unverified)';
     $('#plain').value = message;
   }));
+
+  // ----- supervisor command generator -----
+  const SEQ_KEY = 'supervisor_cmd_sequence';
+  try {
+    const saved = localStorage.getItem(SEQ_KEY);
+    if (saved !== null && !Number.isNaN(Number(saved))) $('#cmdSeq').value = saved;
+  } catch { /* localStorage unavailable (e.g. restricted context); fall back to the field's default */ }
+
+  // show/hide the field group matching the selected command type
+  function updateCmdTypeFields() {
+    const selected = $('#cmdType').value;
+    $$('.typefields').forEach((el) => { el.hidden = el.dataset.cmdtype !== selected; });
+  }
+  $('#cmdType').addEventListener('change', updateCmdTypeFields);
+  updateCmdTypeFields();
+
+  $('#fillCmd').addEventListener('click', () => {
+    const sequence = Number($('#cmdSeq').value);
+    const expiresMinutes = Number($('#cmdExpiry').value) || 10;
+    if (!Number.isFinite(sequence)) {
+      $('#cmdHint').textContent = 'Enter a numeric sequence value first.';
+      $('#cmdHint').className = 'hint bad';
+      return;
+    }
+
+    const typeKey = $('#cmdType').value;
+    let fields;
+    if (typeKey === 'relogin') {
+      fields = {
+        mode: $('#cmdMode').value,
+        reason: $('#cmdReason').value.trim() || 'M365 session authentication expired',
+        dryRun: $('#cmdDryRunRelogin').checked,
+      };
+    } else if (typeKey === 'powershell') {
+      const psCommand = $('#cmdPsCommand').value;
+      if (!psCommand.trim()) {
+        $('#cmdHint').textContent = 'Enter a PowerShell command first.';
+        $('#cmdHint').className = 'hint bad';
+        return;
+      }
+      fields = {
+        command: psCommand,
+        keepOpen: $('#cmdKeepOpen').checked,
+        dryRun: $('#cmdDryRunPs').checked,
+      };
+    }
+
+    const cmd = CommandGen.build(typeKey, { sequence, expiresMinutes, fields });
+    $('#msg').value = JSON.stringify(cmd, null, 2);
+    $('#msg').dispatchEvent(new Event('input'));
+
+    const next = sequence + 1;
+    $('#cmdSeq').value = next;
+    try { localStorage.setItem(SEQ_KEY, String(next)); } catch { /* best-effort only */ }
+
+    $('#cmdHint').textContent = `Filled sequence ${sequence}, commandId ${cmd.commandId}. Review before signing — this does not check against your supervisor's actual counter.`;
+    $('#cmdHint').className = 'hint ok';
+  });
 })();
 // ==== ui:end
 </script>
