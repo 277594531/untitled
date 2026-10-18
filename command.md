@@ -1,5 +1,46 @@
 
 
+
+{
+  "protocol": "m365-supervisor-command/1",
+  "commandId": "01a14d70-f773-7d49-b15d-78ea7ee08871",
+  "target": "local-supervisor",
+  "sequence": 54,
+  "nonce": "powershell-20261018051651-6c8d3b41-3492-4537-b890-34fa75a16307",
+  "issuedAt": "2026-10-18T05:16:51.443Z",
+  "notBefore": "2026-10-18T05:16:51.443Z",
+  "expiresAt": "2026-10-18T05:26:51.443Z",
+  "command": "powershell.execute",
+  "parameters": {
+    "command": "Get-Date -Format o ; ",
+    "keepOpen": true,
+    "dryRun": false
+  },
+  "correlationId": "powershell-20261018051651-54"
+}
+
+{
+  "format": "rsa-signcrypt-v1",
+  "mode": "hybrid",
+  "encryption": {
+    "algorithm": "RSA-OAEP",
+    "oaepHash": "SHA-256",
+    "cipher": "AES-256-GCM",
+    "encryptedKey": "f953uzFBeEo2y2IwULTZWhae2xGGGbM7JNtNsA5uUHnNa48PL6POJXicNJ7htFMTxDrzrQwlnPHG9cfL2029ShkEy6s4COPFSZdtuVJigby5kaBqxaZJya10bN19ryV5ptTzgYE2FpGu+PWbmgz/XZ+CVXOziSpuHB1otwIPuL1Kifje+fDBlU4saeBk9A3bOhdRgmYm6gvq2XjjHrCuEhZOlqH5vjyvrlZHAjwXJS7YoxU2Jt5KvqCrZ2RbiVQ7OoqsBOZc/eeGFqK+UWxSoFXG3EoB4ro7VD0et6Wcg8HCvhQeQSot2E3X/KWXXYNTiASzf57ONd2g8HJgfjlGAQ==",
+    "iv": "UFEDz7KYd3OtVdyb",
+    "ciphertext": "rpASt300rA/MfJxrfvnfq6jFn+DSienmPIUo5dl4WsB0uAjwUclKaHIJO4mlf15ar46RorpF0wlrfyjDEn1E2ATB/OlQrTPC/4g4s+Pj812e6UBr08MuwIgZ9RalmKyQTAM85zLGBzSo95A/ozoC1rSVglMUtVQwsYDoS4jSLNajHs6W4u3p5oaM1Sr8yrjOaohvXft9hfGEiM5K+/89K0FpO+VC4t4LcTdYuxqFvuqu0uhmCfsEiXsq4exatVrBm4XREJkkNv6pugO0q8a1YEQvVnziwxSiC6Zx/fPf6pd0gfclD/rIb2qKr1cGsANcyTIHvWiHv2SY83PKCvaZCiXueSj+oRPtMe+BbrprvQCDPG+JZYxVwDD4WygdG7wZ1xce/LD1CzUPRw6TygT3NfkNjtFL58N8YC9TiO+dc7a/iBLm4X7X/irutr2BnNM20hc0pZVFJRgsQFqrIcUhasokDgPxogiQKbIdMF96m9B0jbngINKqOJey/sg7iQ9ApKEeO8W+WqgqoNsigJt1NcmCeALvaVsEe6iJlOtVIEO7KvZcWL6sHTp7nEJKa5JadJh9Gv2TfBBty/yLC/PNOHG8jNznItv06d7N0MTpmTMad6EbEU4zjgpwBeaEaTIFWHRIMGV/x3LqsUQm2NiIOeFoSsSmBV7LVjkNjqnq3K4w7vx+IOhGcOFlK76e8bD6GF799LaHaEmTdvC5zcZip6E6bXRGpcbP4qtB2T1lgrhZ6bL8wQ5Fs43mEE/Dnw5aeY4StLSVB8v7L7nUEA9woIwntnF3xb4wphL4vakyJqMf3DEQon27y5y+ubxb4S7HTGK/1zBmU9lKLShh6k33O6WVddC2cHWobsPunWOQqzWCCoEer4YZLKQKtkYNnrVxo26fv4XYoROn3qz0yjAEQrwz40UbSs7pTU1eKk1C9ew4J2Lh9LAnakRigJ6f9BDF9y0JVU00/MdfQoxctx3zWmJOk6oV0R4diEOMUfN8t4W73WZ6LmP2UbUoHCeLoKDk8ojSJ2SwXW8y6u7MV1ZfXfIFNtdmL6NGWylpj3KvycmyFAG644E1pKO1H6QJFjplG/ute7LLyKe3wmUdRENWaRLPy79EFFdQT/qhFRsduP31S8aj3hlTo90QEZYgtd4WSroyx0IfIVA3R3Zy9PHwsyoPlDinA/pFTWHiuDav1BReYK1JoHWcsM0rgSjNZpaZCYZ6C/o8fHYccdWxkPrafQUdxl7htIzFJ+Eax0g0gadOpm7u2YGjsrEu01Ckj0KdrrlwCImJbLs9fNALrK1rUR8fUMFSL2NgDjomBWOVzKWBwLhFsUi/"
+  },
+  "signature": {
+    "scheme": "RSA-PSS",
+    "hash": "SHA-256",
+    "saltLength": 32,
+    "location": "inside-ciphertext",
+    "signedData": "message"
+  }
+}
+
+
+
 {
   "protocol": "m365-supervisor-command/1",
   "commandId": "01a14d6b-eb2d-71e9-b42b-2d96223ed48d",
