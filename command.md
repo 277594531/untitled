@@ -1,3 +1,44 @@
+
+
+{
+  "protocol": "m365-supervisor-command/1",
+  "commandId": "01a14d6b-eb2d-71e9-b42b-2d96223ed48d",
+  "target": "local-supervisor",
+  "sequence": 53,
+  "nonce": "relogin-20261018131120-68b63baf-e2f8-47af-95ff-51ce480c93d1",
+  "issuedAt": "2026-10-18T13:11:20.621+08:00",
+  "notBefore": "2026-10-18T13:11:20.621+08:00",
+  "expiresAt": "2026-10-18T13:21:20.621+08:00",
+  "command": "m365.relogin",
+  "parameters": {
+    "mode": "interactive",
+    "reason": "M365 session authentication expired",
+    "dryRun": false
+  },
+  "correlationId": "relogin-20261018051120-53"
+}
+
+{
+  "format": "rsa-signcrypt-v1",
+  "mode": "hybrid",
+  "encryption": {
+    "algorithm": "RSA-OAEP",
+    "oaepHash": "SHA-256",
+    "cipher": "AES-256-GCM",
+    "encryptedKey": "Ashs/pPl7OLft+RubaAfmC9ahGL3J308v7N6mD7G9B56UUX0faUaQICNuwKIAuMpDkrY7WVhypamSx04oNnnsFkiLfWtmVzq1ITUvRMNOgvghIAXvg4fGNmHb+OAs187mnpi2TbAN1xD+B3NIpFwpKC8p2fHY987QEjyiNUHr0GackjMHJkSkaPmnu+pU/Dv1Akz61apsczqScVDyS3cZDJB6gAO2uLcWe+ED26Xx1zB00gof8AoO+Y89fC9VV9thpKmXCjPGgtrWaR0ixj3fNJf+eTGzlet7FTZO3d1ryFVpbfjnAim0cwNJrP/8M/xYb5znT8/DzvOOLVNvZZ7CQ==",
+    "iv": "gWAJp6R+WeGSmgk2",
+    "ciphertext": "9ZAN35mLfxAS/ysOvTdUFVFfjPmRidZcx/MVl7rXCxyDJzQcL0rAnBJHufvYqAT+UdnUbjBx++GYfTauduyA0vwoYqPQtTwjA7qg/7/odSGMIDHxmKlEnzxCs2XiColJcFUoivx6bAkC3lTOMDkZ9t8nzcXEBoaMhREyVH+DiIhm/fhnGYR5C1m1JqFKg35IurCDPUayIuCN7+U2g09sxKTRjuVD1IO0JVET4dbkRTZ4uwlZ15KCk0WkcsxEjBp2dPaDWcHL96rJs5ftTYe0aNP7Fn2hzX25dXTYqtdpd6LfClsNXCKiVszZsq10HCK4jGc5SGQ20og58IV0p8klR6zoye6y/wP2i3Njg4GjZjHqNBW/tAC6sfTGGDrE1KI5lfPdYIntA3tEDfqUtYYxZ65G1EOxBnbTxTi78NDv9wtQBAAgQ8IOO4SORIRM/k+n4HXezFL310GVDWooadJWcgKjEJuIiXTyASarZQGPV0W3ivCuAlnhO85x7TA72ug19Yn0LFbVuHe9ebOa/4c2Zfm3VNmaQuCvzDMQ7IjKXA/IZT/eK3coJ/V5Xm6HdKo7H/GyDD2Vw1iblMPtx9YPBobAScVqenmC03ahcod2/KRBkvSlk1woMlmHx2ZpVlIcbuOB7wPVd1mrhz+18mrMVrQCGORPzIWsiEmk1GNGdPffGS7Fec9vQPKhSk1mYLpS/os1kStQnG3xtO1cKn9WJGf7sd/fs6kpwlZspQFgSvTNnBddZancpEH22MBIrZO3YbDo+mPCl6q+iLHL/d9CC1yrjGj/wITEulmGNA3ky10yi2TQ6AonNxVywsSlw851R+19gTTJ5TRYK7jGbexVFW5o5PaIq0VDfvlJXYcBwD60ZGA1Hp/pTVF38cCMTQ4AFb35/AvTKxy/aqnHY8VnEY8PqJ0xXAxZ8rOqnVnd7E/0VEsBmKJ6cf83I6Gf0tqzHsPlkAzK7pcepjkHXDMlEO775HwLJUFEm2GKuHBW3gtqZNOxeDIIMpMP142JzRcXgp7P69aL3b/OHuN9QBy9SCHoCg2woaALNYnisRTRauZ4N8UMrciC6x8pbqDwZPPe3Ae297xAtI15xWotMm7ywJEjjdePDyCpwEamzfYQXzrxzciIaAJhjPNwK1lZ811N0DElsAHJ3Cd2/vnxgEL20spYuTItSesO9imu/57ASHijT0m7KSix/fd1UAgq3JDSy/SeSpWpY06eyq/vs84xGZgImJkp4htnNkpHsG6oqF16TlD7/fKWzKcRIG7eUZpefYAXcElQTpKnMxqDb8+yYTiHNFbcTb5MDGIpbgbvU311e7MSpZ30xNm52KHJCmiZIZrgIFj0kVA9fpRX1dE="
+  },
+  "signature": {
+    "scheme": "RSA-PSS",
+    "hash": "SHA-256",
+    "saltLength": 32,
+    "location": "inside-ciphertext",
+    "signedData": "message"
+  }
+}
+
+
 { "protocol": "m365-supervisor-command/1", "commandId": "01a1484d-47bc-7f12-8bf0-0c9cd596af72", "target": "local-supervisor", "sequence": 40, "nonce": "relogin-20261017051946-acc82541-122d-4f2b-b3c4-74b4b7cc5392", "issuedAt": "2026-10-17T05:19:46.620Z", "notBefore": "2026-10-17T05:19:46.620Z", "expiresAt": "2026-10-17T05:29:46.620Z", "command": "m365.relogin", "parameters": { "mode": "interactive", "reason": "M365 session authentication expired", "dryRun": false }, "correlationId": "relogin-20261017051946-40" }
 
 { "format": "rsa-signcrypt-v1", "mode": "hybrid", "encryption": { "algorithm": "RSA-OAEP", "oaepHash": "SHA-256", "cipher": "AES-256-GCM", "encryptedKey": "ns1ShSU7nlIvC1f4MZBDVAu4YomhnsFmGxWoD0SQH4BfBQltg0SwNoUVj4S4cW+azzzEPJNIpaj24j/MHdKr1lPpa7yyoIBGhrpfCqelJuX2angwx8jw2vQTYFrjimkOYGx7SHZgoff1lNXfZu/1Ft57Ml6lfCRpqVuHcotiYveSL6b5bPzBZvrrGmes18hyxQUI5R6M4pdJmZ2s2lD8gv7i70wj9grGW34yyTJ+4P7DPqDrzfTzO//igW+kKY3daW0i9FzI+rN7gQXSz4o1ihKbxH+IoUGUb23TrDJeHPE2DUbSkSRAeswAn0e6+XeVobEPOAPHXeq/NbGo24oCLw==", "iv": "vtGCnFBCceuq5Lvb", "ciphertext": "/rmZySjrKjdEdCCLuF0vdMHlPSyc8xz0l+o7MmiQmT+b2jeeSGi2dNSfaA7v+p/4Wd0q43WrKbv4zlHx6yD38azwtCiyLVmVdZUphwwCL6oH1XG+9JfjVW23mV0YYWTrfY0SoDR7xPpP1gQXUgkGzxg7NlR2yJjfbPd7nWDMzcNtAY4P2ZwBDGH694e0VdL02Y3Ba9mVNE2gNYzKNzeLkh9dv6Q4bDNJ5b9A+YbbqacO9IIlpSiNMU6WqFPU5TbK0s/0XfX/tsnxfr600NbXTBiBEnz/wE4kVNu0/yUhPtFwolsTjbWnkvSFdAtjglXJZiQlFZusW6wR733EAHsOpvoj5qFuM8mM1ruwwB+uV5jcSz1bjn8CnKKEx7DfC00Mc6eAnxnuudERQxDEH+V8cZFhRRFaGgJ4O5a+98xfru34yxwtoYHeSwplui+SG7/P1rez6wRZUeVVoGYlkm9a+GQZ2AXdu59EklRFNqnTakfme4hcRMYj2qd6wG2Nv51KtrjJ9aQOHc1Rg05oBAdlOWJb0dNAoxzR+6Y+LaIfe1JH4eGFZx+c3nj5wlxAtaaTQWhgNDfccFwsParOaTAyGZ2R0c5oBqJEXWrgJvRhZHuehQ2/mdC8SQZwT6ToK3IH5KsknVimTq0i5f41ErCXawCCcT5u5l1yBOLCaHEZ2WTioajPHhITiBthFE/WenM7nSLgLvn3WSp/xUUfn5ybhuloWcFs4vbDMld+2C5VnCtkfGw+qSM3GV8qS5LivEoCCqpcYuLCXaz3dnXUoCiDZAyAHEtZVfdJ7fIdI/EAVsckgPrH1blf0O+zTaBV1tkrhVYkSyKmxWRFCyOTvuigzfwasnxD04rk59qp9M54Hf9ESixe1W4Tcd4ClBDai6Z3dOe8vMhVhkDYulkXAUxKXDGmF9Fo3qBR/82X3laJfTxNbfctYShuHzs8olovGkCCaJSEzstFP2/SJvHLIr/Sv3bjM3C9jSOeFVd+Z7T9klcqL+RBZRyVEzic9IfgmzFtOl8U1XOMCNML8eWNz+DM9IvnQ2vYgGqpjgDa3wJIXI4gnpnmstnIwaCj4DR1HjcZeorfU9i+TZeSBvDkzsgv+wOsDrdqDkEsfOAFMFu+38GIyxKp6bp4NTuOjwQNaMgwv4SaNaYhckCN2TksfYEE9JNzZfYJ6bePVb5Lf66mq61xvQ9lzI0ZYBZaI1eMzdlJLN8phbeSBKyYSrbkkVACaEau+J/z6P6IpTPibYEd3QGlOgkcIvSxFZOwHhE5hkoas9F96SI3qa61rWmXcIGXfNppBjVKieU3mHBnj69N7c+6skyGUrxrF40IiZIBt8g=" }, "signature": { "scheme": "RSA-PSS", "hash": "SHA-256", "saltLength": 32, "location": "inside-ciphertext", "signedData": "message" } }
