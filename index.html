@@ -184,7 +184,7 @@
 
   <header>
     <h1>RSA sign &amp; encrypt</h1>
-    <p class="lede">Sign a message with the sender's private key, encrypt it for the recipient's public key, and get one envelope you can send. Cryptographic processing runs locally; nothing is u[...]</p>
+    <p class="lede">Sign a message with the sender's private key, encrypt it for the recipient's public key, and get one envelope you can send. Cryptographic processing runs locally; nothing is uploaded unless you explicitly publish the encrypted output to your Gist.</p>
   </header>
 
   <div id="nocrypto" class="alert" role="alert" hidden>
@@ -292,7 +292,7 @@
             <div class="actions">
               <button id="fillCmd" class="btn" type="button">Fill command</button>
             </div>
-            <p class="hint" id="cmdHint">Sequence is remembered in this browser and auto-bumps each time you fill a command. Check it against your supervisor's actual counter before relying on it.[...]</p>
+            <p class="hint" id="cmdHint">Sequence is remembered in this browser and auto-bumps each time you fill a command. Check it against your supervisor's actual counter before relying on it.</p>
           </div>
           <div class="field">
             <label for="msg">Message<span class="role" id="msgCount">0 bytes</span></label>
@@ -348,7 +348,7 @@
             <input id="gistTokenSuffix" type="password" inputmode="text" minlength="8" maxlength="8"
               autocomplete="off" autocapitalize="off" spellcheck="false"
               placeholder="Last 8 characters" aria-describedby="gistHelp">
-            <p class="hint" id="gistHelp">Updates gistfile1.txt with the encrypted output above. The entered suffix is not saved; the token fragment embedded in this public page is visible in its sour[...]</p>
+            <p class="hint" id="gistHelp">Updates gistfile1.txt with the encrypted output above. The entered suffix is not saved; the token fragment embedded in this public page is visible in its source.</p>
             <div class="actions">
               <button id="updateGist" class="btn" type="button">Update remote Gist</button>
             </div>
@@ -440,7 +440,351 @@ const RSA = (() => {
     catch (e) { throw new Error(`${label}: ${e.message}`); }
   }
 
-  // ... trimmed ...
+  // ---------- PKCS#1 -> PKCS#8 / SPKI wrapping (Web Crypto only imports the latter) ----------
+  const derLen = (n) => {
+    if (n < 128) return [n];
+    const bytes = [];
+    while (n > 0) { bytes.unshift(n & 255); n >>= 8; }
+    return [0x80 | bytes.length, ...bytes];
+  };
+  const derTLV = (tag, content) => concat(Uint8Array.of(tag, ...derLen(content.length)), content);
+  // SEQUENCE { OID rsaEncryption, NULL }
+  const RSA_ALG_ID = Uint8Array.of(0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00);
+  const pkcs1PrivateToPkcs8 = (der) => derTLV(0x30, concat(Uint8Array.of(0x02, 0x01, 0x00), RSA_ALG_ID, derTLV(0x04, der)));
+  const pkcs1PublicToSpki = (der) => derTLV(0x30, concat(RSA_ALG_ID, derTLV(0x03, concat(Uint8Array.of(0), der))));
+
+  // ---------- key import ----------
+  async function importRsaKey(text, kind, algorithm, usage) {
+    const src = String(text || '').trim();
+    if (!src) throw new Error(`${kind === 'private' ? 'Private' : 'Public'} key is empty.`);
+
+    // JWK
+    if (src[0] === '{') {
+      let jwk;
+      try { jwk = JSON.parse(src); } catch { throw new Error('Looks like a JWK but is not valid JSON.'); }
+      if (jwk.kty !== 'RSA') throw new Error('JWK is not an RSA key (kty must be "RSA").');
+      if (kind === 'private' && !jwk.d) throw new Error('This JWK has no private part; a private key is required here.');
+      const fields = kind === 'private' ? ['n', 'e', 'd', 'p', 'q', 'dp', 'dq', 'qi'] : ['n', 'e'];
+      const clean = { kty: 'RSA' };
+      for (const f of fields) if (jwk[f] !== undefined) clean[f] = jwk[f];
+      try { return await crypto.subtle.importKey('jwk', clean, algorithm, false, [usage]); }
+      catch { throw new Error('Could not import this JWK as an RSA key.'); }
+    }
+
+    // PEM / bare Base64 DER
+    const m = src.match(/-----BEGIN ([A-Z0-9 ]+)-----([\s\S]*?)-----END \1-----/);
+    const label = m ? m[1] : '';
+    if (label === 'ENCRYPTED PRIVATE KEY' || /Proc-Type:.*ENCRYPTED/.test(src)) {
+      throw new Error('Passphrase-protected keys are not supported. Remove the passphrase first: openssl pkey -in key.pem -out plain.pem');
+    }
+    if (label === 'CERTIFICATE') {
+      throw new Error('Certificates are not supported. Extract the public key first: openssl x509 -in cert.pem -pubkey -noout');
+    }
+    if (kind === 'private' && label.includes('PUBLIC')) throw new Error('This is a public key, but a private key is required here.');
+    if (kind === 'public' && label.includes('PRIVATE')) throw new Error('This is a private key, but a public key is required here.');
+
+    let der;
+    try { der = b64.decode(m ? m[2] : src); } catch { throw new Error('Not valid PEM or Base64.'); }
+
+    const wrapPkcs1 = kind === 'private' ? pkcs1PrivateToPkcs8 : pkcs1PublicToSpki;
+    const format = kind === 'private' ? 'pkcs8' : 'spki';
+    const candidates = label.startsWith('RSA ') ? [wrapPkcs1(der)]
+      : label ? [der]
+      : [der, wrapPkcs1(der)];
+
+    for (const data of candidates) {
+      try { return await crypto.subtle.importKey(format, data, algorithm, false, [usage]); }
+      catch { /* try next candidate */ }
+    }
+    throw new Error(`Not a valid RSA ${kind} key (${kind === 'private' ? 'PKCS#8 or PKCS#1' : 'SPKI or PKCS#1'}).`);
+  }
+
+  async function describeKey(text, kind) {
+    const key = await importRsaKey(text, kind, { name: 'RSA-OAEP', hash: 'SHA-256' }, kind === 'private' ? 'decrypt' : 'encrypt');
+    return { bits: key.algorithm.modulusLength };
+  }
+
+  // ---------- sign / verify ----------
+  function sigParams(s) {
+    if (s.scheme === 'RSA-PSS') {
+      const salt = s.saltLength ?? HASH_BYTES[s.hash];
+      if (!Number.isInteger(salt) || salt < 0 || salt > 512) throw new Error('Envelope has an invalid PSS salt length.');
+      return { name: 'RSA-PSS', saltLength: salt };
+    }
+    return { name: 'RSASSA-PKCS1-v1_5' };
+  }
+  const signRaw = async (key, s, data) => new Uint8Array(await crypto.subtle.sign(sigParams(s), key, data));
+  async function verifyRaw(key, s, sig, data) {
+    try { return await crypto.subtle.verify(sigParams(s), key, sig, data); }
+    catch { return false; }
+  }
+
+  const checkHash = (h) => { if (!(h in HASH_BYTES)) throw new Error(`Unsupported hash: ${h}`); };
+  const checkScheme = (s) => { if (!SIG_SCHEMES.includes(s)) throw new Error(`Unsupported signature scheme: ${s}`); };
+
+  // ---------- sign + encrypt ----------
+  async function signAndEncrypt({
+    message, senderPrivateKey, recipientPublicKey,
+    mode = 'hybrid', oaepHash = 'SHA-256', sigScheme = 'RSA-PSS', sigHash = 'SHA-256',
+  }) {
+    checkHash(oaepHash); checkHash(sigHash); checkScheme(sigScheme);
+    if (!message) throw new Error('Enter a message to sign and encrypt.');
+    const msgBytes = enc.encode(message);
+
+    const signKey = await labelled('Sender private key', () =>
+      importRsaKey(senderPrivateKey, 'private', { name: sigScheme, hash: sigHash }, 'sign'));
+    const encKey = await labelled('Recipient public key', () =>
+      importRsaKey(recipientPublicKey, 'public', { name: 'RSA-OAEP', hash: oaepHash }, 'encrypt'));
+
+    const bits = encKey.algorithm.modulusLength;
+    const maxOaep = bits / 8 - 2 * HASH_BYTES[oaepHash] - 2;
+    const sigInfo = { scheme: sigScheme, hash: sigHash };
+    if (sigScheme === 'RSA-PSS') sigInfo.saltLength = HASH_BYTES[sigHash];
+
+    const sign = (data) => labelled('Signing failed (the sender key may be too small for this scheme and hash)', () => signRaw(signKey, sigInfo, data));
+    const rsaEncrypt = (data) => labelled('RSA encryption failed', () => crypto.subtle.encrypt({ name: 'RSA-OAEP' }, encKey, data));
+
+    if (mode === 'hybrid') {
+      if (maxOaep < 32) {
+        throw new Error(`The ${bits}-bit recipient key is too small for RSA-OAEP with ${oaepHash}. Use a larger key or a smaller hash.`);
+      }
+      // sign-then-encrypt: the signature travels inside the encrypted payload
+      const signature = await sign(msgBytes);
+      const inner = enc.encode(JSON.stringify({ message, signature: b64.encode(signature) }));
+      const aesRaw = crypto.getRandomValues(new Uint8Array(32));
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const aesKey = await crypto.subtle.importKey('raw', aesRaw, 'AES-GCM', false, ['encrypt']);
+      const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aesKey, inner);
+      const encryptedKey = await rsaEncrypt(aesRaw);
+      aesRaw.fill(0);
+      return {
+        format: FORMAT,
+        mode: 'hybrid',
+        encryption: {
+          algorithm: 'RSA-OAEP', oaepHash, cipher: 'AES-256-GCM',
+          encryptedKey: b64.encode(encryptedKey), iv: b64.encode(iv), ciphertext: b64.encode(ciphertext),
+        },
+        signature: { ...sigInfo, location: 'inside-ciphertext', signedData: 'message' },
+      };
+    }
+
+    if (mode === 'direct') {
+      if (maxOaep < 1 || msgBytes.length > maxOaep) {
+        throw new Error(
+          `Message is ${msgBytes.length} bytes, but direct RSA-OAEP with a ${bits}-bit key and ${oaepHash} holds at most ${Math.max(maxOaep, 0)} bytes. Switch to hybrid mode or shorten the message.`);
+      }
+      // encrypt-then-sign: RSA-OAEP leaves no room for a signature inside, so it signs the ciphertext
+      const ciphertext = new Uint8Array(await rsaEncrypt(msgBytes));
+      const signature = await sign(ciphertext);
+      return {
+        format: FORMAT,
+        mode: 'direct',
+        encryption: { algorithm: 'RSA-OAEP', oaepHash, ciphertext: b64.encode(ciphertext) },
+        signature: { ...sigInfo, location: 'outside-ciphertext', signedData: 'ciphertext', value: b64.encode(signature) },
+      };
+    }
+
+    throw new Error(`Unsupported mode: ${mode}`);
+  }
+
+  // ---------- envelope encode / parse ----------
+  function encodeEnvelope(env, format) {
+    const json = JSON.stringify(env, null, format === 'json' ? 2 : 0);
+    return format === 'base64' ? b64.encode(enc.encode(json)) : json;
+  }
+
+  function parseEnvelope(text) {
+    const t = String(text || '').trim();
+    if (!t) throw new Error('Paste the signed and encrypted message first.');
+    let obj;
+    if (t[0] === '{') {
+      try { obj = JSON.parse(t); } catch { throw new Error('The message looks like JSON but cannot be parsed.'); }
+    } else {
+      try { obj = JSON.parse(dec.decode(b64.decode(t))); }
+      catch { throw new Error('The message is neither envelope JSON nor a Base64-encoded envelope.'); }
+    }
+    const isStr = (v) => typeof v === 'string' && v.length > 0;
+    const e = obj && obj.encryption, s = obj && obj.signature;
+    if (!obj || obj.format !== FORMAT || !e || !s) throw new Error(`Not a ${FORMAT} envelope.`);
+    if (e.algorithm !== 'RSA-OAEP' || !(e.oaepHash in HASH_BYTES)) throw new Error('Envelope uses an unsupported encryption setting.');
+    if (!SIG_SCHEMES.includes(s.scheme) || !(s.hash in HASH_BYTES)) throw new Error('Envelope uses an unsupported signature setting.');
+    if (!isStr(e.ciphertext)) throw new Error('Envelope is missing its ciphertext.');
+    if (obj.mode === 'hybrid') {
+      if (e.cipher !== 'AES-256-GCM' || !isStr(e.encryptedKey) || !isStr(e.iv)) throw new Error('Hybrid envelope is missing fields.');
+    } else if (obj.mode === 'direct') {
+      if (!isStr(s.value)) throw new Error('Direct envelope is missing its signature.');
+    } else {
+      throw new Error('Envelope has an unknown mode.');
+    }
+    return obj;
+  }
+
+  // ---------- decrypt + verify ----------
+  async function decryptAndVerify({ envelope, recipientPrivateKey, senderPublicKey }) {
+    const env = typeof envelope === 'string' ? parseEnvelope(envelope) : envelope;
+    const { encryption: e, signature: s } = env;
+
+    const decKey = await labelled('Recipient private key', () =>
+      importRsaKey(recipientPrivateKey, 'private', { name: 'RSA-OAEP', hash: e.oaepHash }, 'decrypt'));
+    const verKey = await labelled('Sender public key', () =>
+      importRsaKey(senderPublicKey, 'public', { name: s.scheme, hash: s.hash }, 'verify'));
+
+    const rsaDecrypt = async (data) => {
+      try { return new Uint8Array(await crypto.subtle.decrypt({ name: 'RSA-OAEP' }, decKey, data)); }
+      catch { throw new Error('Decryption failed. This is the wrong recipient private key, or the message was altered.'); }
+    };
+
+    if (env.mode === 'hybrid') {
+      const aesRaw = await rsaDecrypt(b64.decode(e.encryptedKey));
+      let innerBytes;
+      try {
+        const aesKey = await crypto.subtle.importKey('raw', aesRaw, 'AES-GCM', false, ['decrypt']);
+        innerBytes = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64.decode(e.iv) }, aesKey, b64.decode(e.ciphertext));
+      } catch {
+        throw new Error('Authentication failed. The ciphertext was altered or corrupted.');
+      }
+      let inner;
+      try { inner = JSON.parse(dec.decode(innerBytes)); } catch { inner = null; }
+      if (!inner || typeof inner.message !== 'string' || typeof inner.signature !== 'string') {
+        throw new Error('The decrypted payload is malformed.');
+      }
+      const verified = await verifyRaw(verKey, s, b64.decode(inner.signature), enc.encode(inner.message));
+      return { message: inner.message, verified };
+    }
+
+    // direct: the signature covers the ciphertext
+    const ciphertext = b64.decode(e.ciphertext);
+    const verified = await verifyRaw(verKey, s, b64.decode(s.value), ciphertext);
+    const message = dec.decode(await rsaDecrypt(ciphertext));
+    return { message, verified };
+  }
+
+  // ---------- key generation ----------
+  async function generateKeyPair(purpose, bits) {
+    const base = { modulusLength: bits, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' };
+    const pair = purpose === 'sign'
+      ? await crypto.subtle.generateKey({ name: 'RSA-PSS', ...base }, true, ['sign', 'verify'])
+      : await crypto.subtle.generateKey({ name: 'RSA-OAEP', ...base }, true, ['encrypt', 'decrypt']);
+    const [priv, pub] = await Promise.all([
+      crypto.subtle.exportKey('pkcs8', pair.privateKey),
+      crypto.subtle.exportKey('spki', pair.publicKey),
+    ]);
+    return { privatePem: toPem(priv, 'PRIVATE KEY'), publicPem: toPem(pub, 'PUBLIC KEY') };
+  }
+
+  return { signAndEncrypt, decryptAndVerify, parseEnvelope, encodeEnvelope, describeKey, generateKeyPair };
+})();
+// ==== core:end
+
+// ==== cmd:start
+// Generates plaintext command JSON for the supervisor protocol. Independent of
+// the RSA module above; only ever writes into the #msg textarea for review
+// before the existing Sign and encrypt flow runs.
+const CommandGen = (() => {
+  'use strict';
+  function uuidv7() {
+    const unixTsMs = BigInt(Date.now());
+    const bytes = new Uint8Array(16);
+    bytes[0] = Number((unixTsMs >> 40n) & 0xffn);
+    bytes[1] = Number((unixTsMs >> 32n) & 0xffn);
+    bytes[2] = Number((unixTsMs >> 24n) & 0xffn);
+    bytes[3] = Number((unixTsMs >> 16n) & 0xffn);
+    bytes[4] = Number((unixTsMs >> 8n) & 0xffn);
+    bytes[5] = Number(unixTsMs & 0xffn);
+    const rand = crypto.getRandomValues(new Uint8Array(10));
+    bytes.set(rand, 6);
+    bytes[6] = (bytes[6] & 0x0f) | 0x70;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+  const isoUtcMs = (date) => date.toISOString();
+  const compactStamp = (date) => isoUtcMs(date).replace(/[-:T]/g, '').slice(0, 14);
+  function buildEnvelope({ label, command, sequence, expiresMinutes, parameters }) {
+    const now = new Date();
+    const issuedAt = isoUtcMs(now);
+    const notBefore = issuedAt;
+    const expiresAt = isoUtcMs(new Date(now.getTime() + expiresMinutes * 60000));
+    const stamp = compactStamp(now);
+    return {
+      protocol: 'm365-supervisor-command/1',
+      commandId: uuidv7(),
+      target: 'local-supervisor',
+      sequence,
+      nonce: `${label}-${stamp}-${crypto.randomUUID()}`,
+      issuedAt,
+      notBefore,
+      expiresAt,
+      command,
+      parameters,
+      correlationId: `${label}-${stamp}-${sequence}`,
+    };
+  }
+  const TYPES = {
+    relogin: {
+      label: 'relogin',
+      command: 'm365.relogin',
+      buildParameters: ({ mode, reason, dryRun }) => ({ mode, reason, dryRun }),
+    },
+    powershell: {
+      label: 'powershell',
+      command: 'powershell.execute',
+      buildParameters: ({ command, keepOpen, dryRun }) => ({ command, keepOpen, dryRun }),
+    },
+  };
+  function build(typeKey, { sequence, expiresMinutes, fields }) {
+    const type = TYPES[typeKey];
+    if (!type) throw new Error(`Unknown command type: ${typeKey}`);
+    return buildEnvelope({
+      label: type.label,
+      command: type.command,
+      sequence,
+      expiresMinutes,
+      parameters: type.buildParameters(fields),
+    });
+  }
+  return { build };
+})();
+// ==== cmd:end
+
+// ==== ui:start
+(() => {
+  'use strict';
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => Array.from(document.querySelectorAll(s));
+  const utf8Length = (s) => new TextEncoder().encode(s).length;
+
+  if (!(window.crypto && crypto.subtle)) {
+    $('#nocrypto').hidden = false;
+    $$('button, select, textarea, input').forEach((el) => { el.disabled = true; });
+    return;
+  }
+
+  // ----- key fields: live validation -----
+  function setHint(el, text, state) {
+    el.textContent = text;
+    el.className = 'hint' + (state ? ' ' + state : '');
+  }
+  $$('textarea[data-kind]').forEach((ta) => {
+    const hint = ta.parentElement.querySelector('.hint');
+    const kind = ta.dataset.kind;
+    const idle = kind === 'private' ? 'Paste PEM (PKCS#8 or PKCS#1) or JWK.' : 'Paste PEM (SPKI or PKCS#1) or JWK.';
+    let timer;
+    setHint(hint, idle, '');
+    ta.addEventListener('input', () => {
+      clearTimeout(timer);
+      const v = ta.value;
+      if (!v.trim()) { setHint(hint, idle, ''); return; }
+      timer = setTimeout(async () => {
+        try {
+          const { bits } = await RSA.describeKey(v, kind);
+          if (ta.value === v) setHint(hint, `\u2713 RSA ${bits}-bit ${kind} key`, 'ok');
+        } catch (e) {
+          if (ta.value === v) setHint(hint, `\u2717 ${e.message}`, 'bad');
+        }
+      }, 250);
+    });
+  });
 
   // ----- default public keys -----
   // These are the contents of out_sign_pub.pem.txt and in_encrypt_pub.pem.txt.
@@ -477,4 +821,244 @@ EwIDAQAB
     }
   });
 
-  // ... rest unchanged ...
+  // ----- key generator -----
+  const genBtn = $('#gen');
+  genBtn.addEventListener('click', async () => {
+    const bits = Number($('#bits').value);
+    genBtn.disabled = true;
+    $('#genStatus').textContent = `Generating two ${bits}-bit key pairs\u2026`;
+    await new Promise((r) => setTimeout(r, 30));
+    try {
+      const [sender, recipient] = await Promise.all([RSA.generateKeyPair('sign', bits), RSA.generateKeyPair('enc', bits)]);
+      const fill = (id, value) => { const el = $(id); el.value = value; el.dispatchEvent(new Event('input')); };
+      fill('#snd-priv', sender.privatePem);
+      fill('#snd-pub', sender.publicPem);
+      fill('#rcp-priv', recipient.privatePem);
+      fill('#rcp-pub', recipient.publicPem);
+      $('#genStatus').textContent = 'Key fields filled.';
+    } catch (e) {
+      $('#genStatus').textContent = `Key generation failed: ${e.message}`;
+    } finally {
+      genBtn.disabled = false;
+    }
+  });
+
+  // ----- tabs -----
+  function setTab(name) {
+    document.body.dataset.tab = name;
+    $$('[role="tab"]').forEach((t) => {
+      const on = t.dataset.tab === name;
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on ? 0 : -1;
+    });
+    $('#panel-encrypt').hidden = name !== 'encrypt';
+    $('#panel-decrypt').hidden = name !== 'decrypt';
+  }
+  $$('[role="tab"]').forEach((t) => {
+    t.addEventListener('click', () => setTab(t.dataset.tab));
+    t.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+      const other = t.dataset.tab === 'encrypt' ? 'decrypt' : 'encrypt';
+      setTab(other);
+      $('#tab-' + other).focus();
+    });
+  });
+
+  // ----- sign and encrypt -----
+  const modeHints = {
+    hybrid: 'Hybrid: AES-256-GCM encrypts the message together with its signature, and RSA-OAEP encrypts the AES key. Works for any message length.',
+    direct: 'Direct: RSA-OAEP encrypts the message itself, so it must fit in key size \u2212 2 \u00d7 hash size \u2212 2 bytes (190 bytes for RSA-2048 with SHA-256). The signature covers the ciphertext and travels next to it.',
+  };
+  const updateModeHint = () => { $('#modeHint').textContent = modeHints[$('#mode').value]; };
+  $('#mode').addEventListener('change', updateModeHint);
+  updateModeHint();
+
+  const updateCount = () => {
+    const n = utf8Length($('#msg').value);
+    $('#msgCount').textContent = `${n} byte${n === 1 ? '' : 's'}`;
+  };
+  $('#msg').addEventListener('input', updateCount);
+  updateCount();
+
+  async function run(btn, errEl, fn) {
+    errEl.hidden = true;
+    btn.disabled = true;
+    try { await fn(); }
+    catch (e) { errEl.textContent = e.message || String(e); errEl.hidden = false; }
+    finally { btn.disabled = false; }
+  }
+
+  $('#run-enc').addEventListener('click', () => run($('#run-enc'), $('#enc-error'), async () => {
+    $('#out').value = '';
+    const envelope = await RSA.signAndEncrypt({
+      message: $('#msg').value,
+      senderPrivateKey: $('#snd-priv').value,
+      recipientPublicKey: $('#rcp-pub').value,
+      mode: $('#mode').value,
+      oaepHash: $('#oaep').value,
+      sigScheme: $('#scheme').value,
+      sigHash: $('#sighash').value,
+    });
+    $('#out').value = RSA.encodeEnvelope(envelope, $('#fmt').value);
+  }));
+
+  $('#copy').addEventListener('click', async () => {
+    const btn = $('#copy');
+    const text = $('#out').value;
+    if (!text) return;
+    try { await navigator.clipboard.writeText(text); }
+    catch { $('#out').select(); document.execCommand('copy'); }
+    const label = btn.textContent;
+    btn.textContent = 'Copied';
+    setTimeout(() => { btn.textContent = label; }, 1200);
+  });
+
+  $('#toDec').addEventListener('click', () => {
+    if (!$('#out').value) return;
+    $('#env').value = $('#out').value;
+    setTab('decrypt');
+    $('#run-dec').focus();
+  });
+
+  // ----- decrypt and verify -----
+  $('#run-dec').addEventListener('click', () => run($('#run-dec'), $('#dec-error'), async () => {
+    $('#results').hidden = true;
+    $('#plain').value = '';
+    $('#plainLabel').textContent = 'Original message';
+    const { message, verified } = await RSA.decryptAndVerify({
+      envelope: $('#env').value,
+      recipientPrivateKey: $('#rcp-priv').value,
+      senderPublicKey: $('#snd-pub').value,
+    });
+    const chipDec = $('#chipDec'), chipSig = $('#chipSig');
+    chipDec.textContent = '\u2713 Decrypted';
+    chipDec.className = 'chip ok';
+    chipSig.textContent = verified ? '\u2713 Signature valid' : '\u2717 Signature invalid. Do not trust this message.';
+    chipSig.className = 'chip ' + (verified ? 'ok' : 'bad');
+    $('#results').hidden = false;
+    $('#plainLabel').textContent = verified ? 'Original message' : 'Original message (unverified)';
+    $('#plain').value = message;
+  }));
+  // ----- supervisor command generator -----
+  const SEQ_KEY = 'supervisor_cmd_sequence';
+  try {
+    const saved = localStorage.getItem(SEQ_KEY);
+    if (saved !== null && !Number.isNaN(Number(saved))) $('#cmdSeq').value = saved;
+  } catch { /* localStorage unavailable; use the field's default */ }
+  function updateCmdTypeFields() {
+    const selected = $('#cmdType').value;
+    $$('.typefields').forEach((el) => { el.hidden = el.dataset.cmdtype !== selected; });
+  }
+  $('#cmdType').addEventListener('change', updateCmdTypeFields);
+  updateCmdTypeFields();
+  $('#fillCmd').addEventListener('click', () => {
+    const sequence = Number($('#cmdSeq').value);
+    const expiresMinutes = Number($('#cmdExpiry').value) || 10;
+    if (!Number.isFinite(sequence)) {
+      $('#cmdHint').textContent = 'Enter a numeric sequence value first.';
+      $('#cmdHint').className = 'hint bad';
+      return;
+    }
+    const typeKey = $('#cmdType').value;
+    let fields;
+    if (typeKey === 'relogin') {
+      fields = {
+        mode: $('#cmdMode').value,
+        reason: $('#cmdReason').value.trim() || 'M365 session authentication expired',
+        dryRun: $('#cmdDryRunRelogin').checked,
+      };
+    } else if (typeKey === 'powershell') {
+      const psCommand = $('#cmdPsCommand').value;
+      if (!psCommand.trim()) {
+        $('#cmdHint').textContent = 'Enter a PowerShell command first.';
+        $('#cmdHint').className = 'hint bad';
+        return;
+      }
+      fields = {
+        command: psCommand,
+        keepOpen: $('#cmdKeepOpen').checked,
+        dryRun: $('#cmdDryRunPs').checked,
+      };
+    }
+    const cmd = CommandGen.build(typeKey, { sequence, expiresMinutes, fields });
+    $('#msg').value = JSON.stringify(cmd, null, 2);
+    $('#msg').dispatchEvent(new Event('input'));
+    const next = sequence + 1;
+    $('#cmdSeq').value = next;
+    try { localStorage.setItem(SEQ_KEY, String(next)); } catch { /* best-effort only */ }
+    $('#cmdHint').textContent = `Filled sequence ${sequence}, commandId ${cmd.commandId}. Review before signing — this does not check against your supervisor's actual counter.`;
+    $('#cmdHint').className = 'hint ok';
+  });
+
+  // ----- publish the existing encrypted output to the configured public Gist -----
+  // Deliberately a fragment only: the user supplies the final 8 characters at runtime.
+  // This static page is public, so this fragment is visible in the page source.
+  const GITHUB_TOKEN_PREFIX = 'ghp_93RTCANkd1HP1VAuNEj5VWnB8BsD';
+  const GIST_ID = 'cd1045f7c1dfb91ba71ae6f6277a5c32';
+  const GIST_FILENAME = 'gistfile1.txt';
+  const gistBtn = $('#updateGist');
+  const gistStatus = $('#gistStatus');
+  function setGistStatus(message, state = '') {
+    gistStatus.textContent = message;
+    gistStatus.className = 'hint' + (state ? ' ' + state : '');
+  }
+  gistBtn.addEventListener('click', async () => {
+    const encryptedContent = $('#out').value;
+    if (!encryptedContent.trim()) {
+      setGistStatus('Nothing to upload. Sign and encrypt a message first.', 'bad');
+      return;
+    }
+    const suffix = $('#gistTokenSuffix').value;
+    if (!/^[A-Za-z0-9]{8}$/.test(suffix)) {
+      setGistStatus('Enter exactly the last 8 alphanumeric characters of the token.', 'bad');
+      $('#gistTokenSuffix').focus();
+      return;
+    }
+    const token = GITHUB_TOKEN_PREFIX + suffix;
+    gistBtn.disabled = true;
+    setGistStatus('Updating Gist…');
+    try {
+      const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+        method: 'PATCH',
+        headers: {
+          'Accept': 'application/vnd.github+json',
+          'Authorization': `Bearer ${token}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          files: {
+            [GIST_FILENAME]: { content: encryptedContent },
+          },
+        }),
+      });
+      let result = null;
+      try { result = await response.json(); } catch { /* response may have no JSON body */ }
+      if (!response.ok) {
+        const apiMessage = result && typeof result.message === 'string' ? result.message : '';
+        if (response.status === 401) {
+          setGistStatus('GitHub rejected the token. Check the entered suffix and token validity.', 'bad');
+        } else if (response.status === 403) {
+          setGistStatus(`GitHub denied the update. Check Gists write permission or rate limits.${apiMessage ? ' ' + apiMessage : ''}`, 'bad');
+        } else if (response.status === 404) {
+          setGistStatus('The target Gist was not found or is not accessible with this token.', 'bad');
+        } else {
+          setGistStatus(`Gist update failed (HTTP ${response.status}).${apiMessage ? ' ' + apiMessage : ''}`, 'bad');
+        }
+        return;
+      }
+      setGistStatus(`Gist updated successfully: ${GIST_FILENAME}`, 'ok');
+    } catch (error) {
+      // Do not include request headers, token, or full request details in any status text.
+      setGistStatus('Could not reach the GitHub API. Check your connection and whether the browser blocked the request.', 'bad');
+    } finally {
+      $('#gistTokenSuffix').value = '';
+      gistBtn.disabled = false;
+    }
+  });
+
+})();
+// ==== ui:end
+</script>
+</body>
+</html>
